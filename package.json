@@ -1,0 +1,22 @@
+{
+	"name": "wikidb",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"start": "wrangler dev",
+		"tail": "wrangler tail",
+		"schema": "npx wrangler d1 execute wikidb --remote --file src/schemas/schema.sql && npx wrangler d1 execute wikidb --local --file src/schemas/schema.sql"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.8.19",
+		"typescript": "^5.8.3",
+		"wrangler": "^4.23.0"
+	},
+	"dependencies": {
+		"@types/node": "^24.0.10",
+		"bcryptjs": "^3.0.2",
+		"hono": "^4.8.12"
+	}
+}

@@ -4,9 +4,8 @@ interface blogReqBody {
     parent?: number
     part?: number
     description?: string
-    tags?: string | string[]
+    tags?: string | string[] | null
     comments_enabled?: number | boolean
-    thumbnail_url?: string
     style?: string
     includeglobal?: number | boolean
     music?: string

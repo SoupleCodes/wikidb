@@ -40,13 +40,13 @@ article
   .post('/:id/comment', async (c) => {
     const id = c.req.param('id')
     const data = await c.req.json();
-    const { post } = data
-    if(!(post && typeof post === 'string')) {
+    const { comment } = data
+    if(!(comment && typeof comment === 'string')) {
       return c.json({ message: 'Invalid post data. Post must be a string' }, 400)
     }
 
     const { results } = await c.env.DB.prepare(`
-      SELECT content FROM articles WHERE id = ?
+      SELECT 1 FROM articles WHERE id = ?
     `).bind(id).all()
     if(results.length === 0) {
       return c.json({ message: 'Article does not exist' }, 404)
@@ -63,7 +63,7 @@ article
         id,
         'Souple',
         new Date().toISOString(),
-        post
+        comment
       ).run()
 
       if(!success) {
@@ -82,9 +82,11 @@ article
       const { results } = await c.env.DB.prepare(`
           SELECT * FROM articles WHERE id = ?
       `).bind(id).all();
-        c.env.DB.prepare(`
+
+      // Add one view
+      c.env.DB.prepare(`
           UPDATE articles SET view_count = view_count + 1 WHERE id = ?
-      `).bind(id)
+      `).bind(id).run()
       return c.json(results);
     } catch (error) {
       return c.json({ message: 'Article does not exist' }, 404);

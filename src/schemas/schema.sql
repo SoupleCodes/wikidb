@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS blogs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT, 
     parent INTEGER DEFAULT 0, 
-    part INTEGER DEFAULT 0, 
+    part INTEGER DEFAULT 0 CHECK (part = 0 OR (part > 0 AND parent != 0)),
     description TEXT DEFAULT '', 
     author TEXT DEFAULT 'Anonymous', 
     content TEXT, 
@@ -83,7 +83,6 @@ CREATE TABLE IF NOT EXISTS blogs (
     view_count INTEGER DEFAULT 0, 
     tags TEXT, 
     comments_enabled INTEGER DEFAULT 1, 
-    thumbnail_url TEXT, 
     style TEXT, 
     music TEXT, 
     includeglobal INTEGER DEFAULT 0

@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { addUserData } from '../util/data';
 import { trimTrailingSlash } from 'hono/trailing-slash'
 import { parseIfArray, parseIfJSON } from '../util/parse';
-import { jwt, verify } from 'hono/jwt';
 import { verifyToken } from '../util/auth';
 
 const user = new Hono<{ Bindings: Bindings }>();
@@ -123,6 +122,22 @@ user
     }
   })
 
+  .get('/:username/followers', async (c) => {
+    const { username } = c.req.param()
+    const lowercaseUsername = username.toLowerCase()
+
+    try {
+      const { results } = await c.env.DB.prepare(`
+        SELECT follower FROM follows WHERE following = ?
+      `).bind(lowercaseUsername).all()
+
+      const followers = await addUserData(results, c.env.DB)
+      return c.json(followers)
+    } catch (error) {
+      return c.json({ message: 'Something went wrong with getting user\'s followers' }, 404)
+    }
+  })
+
   .post('/:username/comment', async (c) => {
     // Auth
     const decoded = await verifyToken(c)
@@ -142,8 +157,7 @@ user
 
     const { username } = c.req.param()
     const lowercaseUsername = username.toLowerCase()
-    const data = await c.req.json();
-    const { comment } = data
+    const { comment } = await c.req.json();
     if(!(comment && typeof comment === 'string')) {
       return c.json({ message: 'Comment must be a string' }, 400)
     }
@@ -178,6 +192,85 @@ user
       console.error(error)
       return c.json({ message: 'Something went wrong with creating your comment' }, 404)
     }
+  })
+
+  .post('/:username/follow', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+
+    const { username } = c.req.param()
+    const lowercaseUsername = username.toLowerCase()
+
+    // Check if user exists
+    const { results } = await c.env.DB.prepare(`
+      SELECT id FROM users WHERE lowercase_username = ?
+    `).bind(lowercaseUsername).all()
+    if(results.length === 0) {
+      return c.json({ message: 'User does not exist' }, 404)
+    }
+
+    try {
+      const { success } = await c.env.DB.prepare(`
+        INSERT INTO follows
+          (follower, following)
+        VALUES
+          (?, ?)
+      `).bind(
+        decoded.user,
+        lowercaseUsername
+      ).run()
+
+      if(!success) {
+        throw new Error('Something went wrong with following this user')
+      }
+
+      return c.json({ message: 'User followed successfully' }, 201)
+    } catch (error) {
+      return c.json({ message: 'Something went wrong with following this user' }, 404)
+    }
+
+  })
+
+  .delete('/:username/follow', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+
+    const { username } = c.req.param()
+    const lowercaseUsername = username.toLowerCase()
+
+    // Check if user exists
+    const { results } = await c.env.DB.prepare(`
+      SELECT id FROM users WHERE lowercase_username = ?
+    `).bind(lowercaseUsername).all()
+    if(results.length === 0) {
+      return c.json({ message: 'User does not exist' }, 404)
+    }
+
+    try {
+      const { success } = await c.env.DB.prepare(`
+        DELETE FROM follows
+        WHERE follower = ? AND following = ?
+      `).bind(
+        decoded.user,
+        lowercaseUsername
+      ).run()
+
+      if(!success) {
+        throw new Error('Something went wrong with unfollowing this user')
+      }
+
+      return c.json({ message: 'User unfollowed successfully' }, 201)
+    } catch (error) {
+      return c.json({ message: 'Something went wrong with unfollowing this user' }, 404)
+    }
+
+
   })
 
   .patch('/:username', async (c) => {

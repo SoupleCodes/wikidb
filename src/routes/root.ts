@@ -71,7 +71,7 @@ root
     // Time to create token!
     const now = new Date().toISOString()
     const payload = {
-        user: username,
+        user: lowercaseUsername,
         role: 'user',
         exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
     }

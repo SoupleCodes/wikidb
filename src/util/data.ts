@@ -1,11 +1,11 @@
 import { parseIfArray } from '../util/parse';
 
-export async function addUserData(comments: Comment[], db: D1Database) {
+export async function addUserData(objects: any[], db: D1Database) {
     const userDataMap = new Map<string, User>();
-    const newCommentArray = [];
+    const newArray = [];
 
-    for (const comment of comments) {
-        const username = comment.commenter.toLowerCase();
+    for (const object of objects) {
+        const username = (object.commenter || object.follower).toLowerCase();
         let userData = userDataMap.get(username);
 
         if (!userData) {
@@ -36,11 +36,11 @@ export async function addUserData(comments: Comment[], db: D1Database) {
             }
         }
 
-        newCommentArray.push({
-            ...comment,
-            data: userData
+        newArray.push({
+            ...object,
+            profile: userData
         });
     }
 
-    return newCommentArray.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return newArray.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }

@@ -1,11 +1,21 @@
 import { Hono } from 'hono';
+import { trimTrailingSlash } from 'hono/trailing-slash'
+import { addUserData } from '../util/data';
+import { verifyToken } from '../util/auth';
 
 const article = new Hono<{ Bindings: Bindings }>();
 
 article
+  .use(trimTrailingSlash())
   .post('/', async (c) => {
     try {
-      const author = 'Souple'
+      // Auth
+      const decoded = await verifyToken(c)
+      if (!decoded) {
+        return c.json({ message: 'Unauthorized' }, 401)
+      }
+      
+      const author = decoded.user
       const data: Article = await c.req.json();
       const { title, content } = data
       if (!title || !content) {
@@ -14,7 +24,7 @@ article
 
       const { success } = await c.env.DB.prepare(`
           INSERT INTO articles
-            (title, author, subject, content, creation_date, last_modified)
+            (title, author, subject, content, created_at, last_modified)
           VALUES
             (?, ?, ?, ?, ?, ?)
       `).bind(
@@ -38,6 +48,12 @@ article
   })
 
   .post('/:id/comment', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+
     const id = c.req.param('id')
     const data = await c.req.json();
     const { comment } = data
@@ -55,13 +71,13 @@ article
     try {
       const { success } = await c.env.DB.prepare(`
         INSERT INTO comments
-          (origin_type, origin_id, commenter, comment_date, content)
+          (origin_type, origin_id, commenter, created_at, content)
         VALUES
-          (?, ?, ?, ?)
+          (?, ?, ?, ?, ?)
       `).bind(
         'article',
         id,
-        'Souple',
+        decoded.user,
         new Date().toISOString(),
         comment
       ).run()
@@ -118,11 +134,13 @@ article
   .get('/:id/comments', async (c) => {
     const id = c.req.param('id');
     try {
-      const { results } = await c.env.DB.prepare(`
+      const { results }: { results: Comment[] } = await c.env.DB.prepare(`
           SELECT * FROM comments WHERE origin_type = ? AND origin_id = ?
-          ORDER BY creation_date ASC
+          ORDER BY created_at ASC
       `).bind('article', id).all();
-      return c.json(results);
+
+      let comments = await addUserData(results, c.env.DB)
+      return c.json(comments);
     } catch (error) {
       return c.json({ message: 'Article does not exist' }, 404);
     }
@@ -135,7 +153,7 @@ article
     try {
       const { results } = await c.env.DB.prepare(`
           SELECT * FROM comments WHERE origin_type = ? AND origin_id = ? AND id = ?
-          ORDER BY creation_date ASC
+          ORDER BY created_at ASC
       `).bind('article', id, commentID).all();
       return c.json(results);
     } catch (error) {
@@ -181,6 +199,12 @@ article
   })
 
   .patch('/:id', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+
     const id = c.req.param('id')
     const data: Article = await c.req.json();
     let { title, content, subject } = data
@@ -202,6 +226,9 @@ article
     if(!title) title = article.title
     if(!content) content = article.content
     if(!subject) subject = article.subject
+    if(article.author !== decoded.user) {
+      return c.json({ message: 'You are not the author of this blog' }, 403)
+    }
 
     // Record article history
     const historySuccess = await c.env.DB.prepare(`
@@ -211,7 +238,7 @@ article
           (?, ?, ?, ?, ?)
     `).bind(
       id,
-      'Souple',
+      decoded.user,
       new Date().toISOString(),
       content,
       article.content
@@ -247,8 +274,27 @@ article
   })
 
   .delete('/:id', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+    
     const id = c.req.param('id')
     try {
+      const { success: result } = await c.env.DB.prepare(`
+        SELECT author FROM articles WHERE id = ?
+      `).bind(id).all()
+
+      if(result) {
+        return c.json({ message: 'Article does not exist' }, 404)
+      }
+
+      const article: Article = result[0] as unknown as Article
+      if(article.author !== decoded.user) {
+        return c.json({ message: 'You are not the author of this article' }, 403)
+      }
+
       const { success } = await c.env.DB.prepare(`
         DELETE FROM articles WHERE id = ?
       `).bind(id).run()

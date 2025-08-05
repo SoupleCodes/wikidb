@@ -2,8 +2,6 @@ interface User {
     id: number;
     username: string;
     lowercase_username: string;
-    password_hash: string;
-    password_changed_at: string;
     created_at: string;
     updated_at: string;
     last_login: string;
@@ -13,8 +11,8 @@ interface User {
     pfp_url?: string;
     signature?: string;
     location?: string;
-    social_links?: string;
-    fav_articles?: string;
+    social_links?: string | string[];
+    fav_articles?: string | number[];
     music?: string[];
     style?: string;
 }

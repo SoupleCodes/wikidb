@@ -1,11 +1,13 @@
 import { Hono } from 'hono'
 import { decode, sign, verify } from 'hono/jwt'
 import bcrypt = require("bcryptjs")
+import { trimTrailingSlash } from 'hono/trailing-slash'
 import { parseIfJSON, parseIfArray } from '../util/parse';
 
 const root = new Hono<{ Bindings: Bindings }>();
 
 root
+  .use(trimTrailingSlash())
   .post('/register', async (c) => {
     const data = await c.req.json()
     const { username, password } = data
@@ -116,8 +118,8 @@ root
     */
 
     if (userInfo) {
-      userInfo.social_links = parseIfJSON(userInfo.social_links);
-      userInfo.fav_articles = parseIfJSON(userInfo.fav_articles);
+      userInfo.social_links = parseIfJSON(userInfo.social_links as unknown as string);
+      userInfo.fav_articles = parseIfJSON(userInfo.fav_articles as unknown as string);
       userInfo.music = parseIfArray(userInfo.music as unknown as string);
     }
 

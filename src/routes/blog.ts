@@ -1,13 +1,23 @@
 import { Hono } from 'hono';
+import { trimTrailingSlash } from 'hono/trailing-slash'
 import { parseIfArray, parseIfJSON } from '../util/parse';
+import { addUserData } from '../util/data';
+import { verifyToken } from '../util/auth';
 
 const blog = new Hono<{ Bindings: Bindings }>();
 
 blog
+  .use(trimTrailingSlash())
   .post('/', async (c) => {
     try {
-        const author = 'Souple'
-        const data: blogReqBody = await c.req.json()
+        // Auth
+        const decoded = await verifyToken(c)
+        if (!decoded) {
+          return c.json({ message: 'Unauthorized' }, 401)
+        }
+
+        const author = decoded.user
+        const data: Blog = await c.req.json()
 
         const { title, content, ...rest } = data
         if (!title || !content) {
@@ -39,7 +49,7 @@ blog
 
         const { success } = await c.env.DB.prepare(`
             INSERT INTO blogs
-                (title, author, content, parent, part, description, creation_date, last_modified, tags, comments_enabled, style, includeglobal, music)
+                (title, author, content, parent, part, description, created_at, last_modified, tags, comments_enabled, style, includeglobal, music)
             VALUES
                 (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
@@ -70,6 +80,12 @@ blog
   })
 
   .post('/:id/comment', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+    
     const id = c.req.param('id')
     const data = await c.req.json()
     const { comment } = data
@@ -87,13 +103,13 @@ blog
     try {
         const { success } = await c.env.DB.prepare(`
           INSERT INTO comments
-            (origin_type, origin_id, commenter, comment_date, content)
+            (origin_type, origin_id, commenter, created_at, content)
           VALUES
-            (?, ?, ?, ?)
+            (?, ?, ?, ?, ?)
         `).bind(
           'blog',
           id,
-          'Souple',
+          decoded.user,
           new Date().toISOString(),
           comment
         ).run()
@@ -126,10 +142,31 @@ blog
       return c.json({ message: 'Blog does not exist' }, 404);
     }
   })
+  
+  .get('/:id/comments', async (c) => {
+    const id = c.req.param('id');
+    try {
+      const { results }: { results: Comment[] } = await c.env.DB.prepare(`
+          SELECT * FROM comments WHERE origin_type = ? AND origin_id = ?
+          ORDER BY created_at ASC
+      `).bind('blog', id).all();
+
+      let comments = await addUserData(results, c.env.DB)
+      return c.json(comments);
+    } catch (error) {
+      return c.json({ message: 'Blog does not exist' }, 404);
+    }
+  })
 
   .patch('/:id', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+
     const id = c.req.param('id')
-    const data: blogReqBody = await c.req.json()
+    const data: Blog = await c.req.json()
     let { title, content } = data
 
     if(!title && !content) {
@@ -144,10 +181,13 @@ blog
       return c.json({ message: 'Blog does not exist' }, 404)
     }
 
-    const blog: blogReqBody = results[0] as unknown as Article
+    const blog: Blog = results[0] as unknown as Article
 
     if(!title) title = blog.title
     if(!content) content = blog.content
+    if(blog.author !== decoded.user) {
+      return c.json({ message: 'You are not the author of this blog' }, 403)
+    }
 
     try {
       const { success } = await c.env.DB.prepare(`
@@ -168,6 +208,42 @@ blog
       }      
     } catch (error) {
       return c.json({ message: 'Something went wrong with updating your blog' }, 500)
+    }
+  })
+
+  .delete('/:id', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized or token expired' }, 401)
+    }
+    
+    const id = c.req.param('id')
+    try {
+      const { success: result } = await c.env.DB.prepare(`
+        SELECT author FROM blogs WHERE id = ?
+      `).bind(id).all()
+
+      if(!result) {
+        return c.json({ message: 'Blog does not exist' }, 404)
+      }
+
+      const blog: Blog = result[0] as unknown as Blog
+      if(blog.author !== decoded.user) {
+        return c.json({ message: 'You are not the author of this blog' }, 403)
+      }
+
+      const { success } = await c.env.DB.prepare(`
+        DELETE FROM blogs WHERE id = ?
+      `).bind(id).run()
+
+      if(!success) {
+        throw new Error('Something went wrong with deleting your blog')
+      }
+
+      return c.json({ message: 'Blog deleted successfully' }, 200)
+    } catch (error) {
+      return c.json({ message: 'Blog does not exist' }, 404);
     }
   })
 

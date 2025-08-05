@@ -1,4 +1,5 @@
-interface blogReqBody {
+interface Blog {
+    author: string
     title: string
     content: string
     parent?: number

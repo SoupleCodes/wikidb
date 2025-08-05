@@ -1,9 +1,14 @@
 import { Hono } from 'hono';
+import { addUserData } from '../util/data';
+import { trimTrailingSlash } from 'hono/trailing-slash'
 import { parseIfArray, parseIfJSON } from '../util/parse';
+import { jwt, verify } from 'hono/jwt';
+import { verifyToken } from '../util/auth';
 
 const user = new Hono<{ Bindings: Bindings }>();
 
 user
+  .use(trimTrailingSlash())
   .get('/:username', async (c) => {
     const { username } = c.req.param()
     const lowercasedUsername = username.toLowerCase()
@@ -52,7 +57,7 @@ user
         const { results } = await c.env.DB.prepare(`
             SELECT * FROM ARTICLES
             WHERE author = ?
-            ORDER BY creation_date DESC
+            ORDER BY created_at DESC
             LIMIT 25 OFFSET ?
         `).bind(lowercasedUsername, (parseInt(page) - 1) * 25).all()
         const { results: [{ total }] } = await c.env.DB.prepare(`
@@ -78,7 +83,7 @@ user
         const { results } = await c.env.DB.prepare(`
             SELECT * FROM blogs 
             WHERE LOWER(author) = ? 
-            ORDER BY creation_date DESC 
+            ORDER BY created_at DESC 
             LIMIT 25 OFFSET ?
         `).bind(lowercasedUsername, (parseInt(page) - 1) * 25).all()
 
@@ -102,10 +107,92 @@ user
     }
   })
 
+  .get('/:username/comments', async (c) => {
+    const user = c.req.param('username');
+    try {
+      const { results }: { results: Comment[] } = await c.env.DB.prepare(`
+          SELECT * FROM comments WHERE origin_type = ? AND origin_id = ?
+          ORDER BY created_at ASC
+      `).bind('user_profile', user).all();
+
+      let comments = await addUserData(results, c.env.DB)
+      return c.json(comments);
+    } catch (error) {
+      console.error(error)
+      return c.json({ message: 'User does not exist' }, 404);
+    }
+  })
+
+  .post('/:username/comment', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+
+    /*
+    curl -X POST \
+  http://localhost:8787/user/pizzatak/comment \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer >>TOKEN HERE<<" \
+  -d '{
+"comment": "pizza for lyfe"
+}'
+    */
+
+    const { username } = c.req.param()
+    const lowercaseUsername = username.toLowerCase()
+    const data = await c.req.json();
+    const { comment } = data
+    if(!(comment && typeof comment === 'string')) {
+      return c.json({ message: 'Comment must be a string' }, 400)
+    }
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT 1 FROM users WHERE lowercase_username = ?
+    `).bind(lowercaseUsername).first()
+    if(results) {
+      return c.json({ message: 'User does not exist' }, 404)
+    }
+
+    try {
+      const { success } = await c.env.DB.prepare(`
+        INSERT INTO comments
+          (origin_type, origin_id, commenter, created_at, content)
+        VALUES
+          (?, ?, ?, ?, ?)
+      `).bind(
+        'user_profile',
+        username,
+        decoded.user,
+        new Date().toISOString(),
+        comment
+      ).run()
+
+      if(!success) {
+        throw new Error('Something went wrong with creating your comment')
+      }
+
+      return c.json({ message: 'Comment created successfully' }, 201)
+    } catch (error) {
+      console.error(error)
+      return c.json({ message: 'Something went wrong with creating your comment' }, 404)
+    }
+  })
+
   .patch('/:username', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+
     const { username } = c.req.param()
     const lowercaseUsername = username.toLowerCase()
     const data: User = await c.req.json()
+    if (decoded.user.toLowerCase() !== lowercaseUsername) {
+      return c.json({ message: 'You can\'t edit someone else\'s profile silly!' }, 403)
+    }
 
     let { about_me, display_name, pfp_url, signature, location, social_links, fav_articles, music, style } = data
 
@@ -122,16 +209,16 @@ user
         return false
       }
 
-      f(about_me), f(display_name), f(signature),
-      f(location), f(style)
+      f("about_me"), f("display_name"), f("signature"),
+      f("location"), f("style")
 
-      if (!(pfp_url && /^https?:\/\/.+/.test(pfp_url))) {
+      if (pfp_url && !(/^https?:\/\/.+/.test(pfp_url))) {
         return c.json({ message: 'Invalid pfp_url format'}, 404)
-      } f(pfp_url)
+      } f("pfp_url")
 
-      if (!Array.isArray(social_links)) {
+      if (social_links && !Array.isArray(social_links)) {
         return c.json({ message: 'social_links must be an array'}, 404)
-      } f(social_links)
+      } f("social_links")
 
       if (music && music !== undefined) {
         if (!Array.isArray(music)) {
@@ -150,39 +237,39 @@ user
                 throw new Error("Music object must have artist_name, song_name, song_url, published, and cover_art with valid types.");
             }
         }
-        f(music as unknown as string)
-
-        if (!Array.isArray(fav_articles)) {
-            return c.json({ message: 'fav_articles must be an array'}, 404)
-        } 
-        if (fav_articles.length > 0) {
-            const checkAllNums = fav_articles.every(id => typeof id === 'number')
-            if (!checkAllNums) {
-                throw new Error('All values in fav_articles must be numbers')
-            }
-            f(fav_articles)
-        }
-        
-        if(updates.length === 0) {
-            return c.json({ message: 'No data to update'}, 400)
-        } else {
-            const { success } = await c.env.DB.prepare(`
-                UPDATE users SET
-                    ${updates.join(', ')}
-                WHERE lowercase_username = ?
-            `).bind(
-                ...bindings,
-                lowercaseUsername
-            ).run()
-
-            if(!success) {
-                throw new Error('Something went wrong with updating your profile')
-            }
-
-            return c.json({ message: 'Profile updated successfully' }, 200)
-        }
+        f("music")
       }
 
+      if (fav_articles) {
+        if(!Array.isArray(fav_articles)) {
+          return c.json({ message: 'fav_articles must be an array'}, 404)
+        }
+        if (fav_articles.length > 0) {
+          const checkAllNums = fav_articles.every(id => typeof id === 'number')
+          if (!checkAllNums) {
+              throw new Error('All values in fav_articles must be numbers')
+          }
+          f("fav_articles")
+        }
+      } 
+        
+      if(updates.length === 0) {
+          return c.json({ message: 'No data to update'}, 400)
+      }
+      const { success } = await c.env.DB.prepare(`
+          UPDATE users SET
+              ${updates.join(', ')}
+          WHERE lowercase_username = ?
+      `).bind(
+          ...bindings,
+          lowercaseUsername
+      ).run()
+
+      if(!success) {
+          throw new Error('Something went wrong with updating your profile')
+      }
+
+      return c.json({ message: 'Profile updated successfully' }, 200)
     } catch (error) {
       return c.json({ message: 'Something went wrong with updating your profile'}, 404)
     }

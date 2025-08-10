@@ -3,7 +3,7 @@ interface User {
     username: string;
     lowercase_username: string;
     created_at: string;
-    updated_at: string;
+    last_activity: string;
     last_login: string;
     about_me?: string;
     display_name?: string;

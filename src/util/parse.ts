@@ -20,7 +20,3 @@ export function parseIfJSON(json: string) {
         return {};
     }
 }
-
-export function checkMusicObject(music: Music) {
-    
-}

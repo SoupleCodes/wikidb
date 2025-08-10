@@ -3,6 +3,7 @@ import { addUserData } from '../util/data';
 import { trimTrailingSlash } from 'hono/trailing-slash'
 import { parseIfArray, parseIfJSON } from '../util/parse';
 import { verifyToken } from '../util/auth';
+import active from '../util/activity';
 
 const user = new Hono<{ Bindings: Bindings }>();
 
@@ -18,7 +19,7 @@ user
                 id,
                 username,
                 created_at,
-                updated_at,
+                last_activity,
                 last_login,
                 about_me,
                 display_name,
@@ -42,7 +43,7 @@ user
                          WHERE lowercase_username = ?
         `).bind(lowercasedUsername).run()
 
-        return c.json(results)
+        return c.json(results[0])
     } catch (error) {
         return c.json({ message: 'Something went wrong with getting this user' }, 404)
     }
@@ -186,6 +187,7 @@ user
       if(!success) {
         throw new Error('Something went wrong with creating your comment')
       }
+      await active(c, decoded.user)
 
       return c.json({ message: 'Comment created successfully' }, 201)
     } catch (error) {
@@ -226,6 +228,7 @@ user
       if(!success) {
         throw new Error('Something went wrong with following this user')
       }
+      await active(c, decoded.user)
 
       return c.json({ message: 'User followed successfully' }, 201)
     } catch (error) {
@@ -264,6 +267,7 @@ user
       if(!success) {
         throw new Error('Something went wrong with unfollowing this user')
       }
+      await active(c, decoded.user)
 
       return c.json({ message: 'User unfollowed successfully' }, 201)
     } catch (error) {
@@ -361,6 +365,7 @@ user
       if(!success) {
           throw new Error('Something went wrong with updating your profile')
       }
+      await active(c, decoded.user)
 
       return c.json({ message: 'Profile updated successfully' }, 200)
     } catch (error) {

@@ -33,10 +33,9 @@ root
     const passwordHash = await bcrypt.hash(password, salt)
 
     // Create user
-    console.log('Creating user....')
     const now = new Date().toISOString()
     const { success } = await c.env.DB.prepare(`
-        INSERT INTO users (username, lowercase_username, password_hash, password_changed_at, created_at, updated_at)
+        INSERT INTO users (username, lowercase_username, password_hash, password_changed_at, created_at, last_activity)
         VALUES (?, ?, ?, ?, ?, ?)
     `).bind(username, lowercaseUsername, passwordHash, now, now, now).run()
     if(!success) {
@@ -56,7 +55,7 @@ root
     }
     const lowercaseUsername = username.toLowerCase()
     const userExists = await c.env.DB.prepare(`
-        SELECT password_hash FROM users WHERE lowercase_username = ?
+        SELECT password_hash, id FROM users WHERE lowercase_username = ?
     `).bind(lowercaseUsername).first()
     if(!userExists) {
         return c.json({ message: 'User not found' }, 404)
@@ -72,6 +71,7 @@ root
     const now = new Date().toISOString()
     const payload = {
         user: lowercaseUsername,
+        id: userExists.id,
         role: 'user',
         exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
     }
@@ -82,7 +82,7 @@ root
         UPDATE users SET 
                       last_login = ?,
                       created_at = ?,
-                      updated_at = ? 
+                      last_activity = ? 
         WHERE lowercase_username = ?
     `).bind(now, now, now, lowercaseUsername).run()
 
@@ -93,7 +93,7 @@ root
             username,
             lowercase_username,
             created_at,
-            updated_at,
+            last_activity,
             last_login,
             about_me,
             display_name,
@@ -108,15 +108,6 @@ root
         FROM users WHERE lowercase_username = ?
     `).bind(lowercaseUsername).first()
 
-    /*
-    const { results: followers } = await c.env.DB.prepare(` -- Commented out: No longer needed to be uncommented
-        SELECT follower FROM follows WHERE follower = ? LIMIT 25
-    `).bind(username).all()
-    const { results: following } = await c.env.DB.prepare(` -- Commented out: No longer needed to be uncommented
-        SELECT following FROM follows WHERE follower = ? LIMIT 25
-    `).bind(username).all()
-    */
-
     if (userInfo) {
       userInfo.social_links = parseIfJSON(userInfo.social_links as unknown as string);
       userInfo.fav_articles = parseIfJSON(userInfo.fav_articles as unknown as string);
@@ -128,11 +119,7 @@ root
       message: 'Successfully logged in',
       token,
       user: {
-        ...userInfo,
-        /*
-        followers: followers.map(f => f.follower),
-        following: following.map(f => f.following)  
-        */     
+        ...userInfo,  
       }
     })
   })
@@ -152,19 +139,25 @@ root
         const { results: users } = await c.env.DB.prepare(`
           SELECT COUNT(*) as total FROM users
         `).all()
+        const { results: polls } = await c.env.DB.prepare(`
+          SELECT COUNT(*) as total FROM polls
+        `).all()
 
         const articlesCount = articles[0].total
         const blogsCount = blogs[0].total
         const usersCount = users[0].total
+        const pollsCount = polls[0].total
 
         return c.json({ 
           stats: {
             articles: articlesCount,
             blogs: blogsCount,
-            users: usersCount
+            users: usersCount,
+            polls: pollsCount
           }
         })
     } catch (error) {
+        console.error(error)
         return c.json({ message: 'Failed to collect statistics' }, 404)
     }
   })

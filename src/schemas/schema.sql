@@ -1,3 +1,26 @@
+PRAGMA foreign_keys = false;
+PRAGMA foreign_key_check;
+
+DROP TABLE IF EXISTS themes;
+CREATE TABLE IF NOT EXISTS themes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    author TEXT DEFAULT 'Anonymous',
+    reviewer TEXT DEFAULT 'Anonymous',
+    thumbnail TEXT,
+    color TEXT,
+    tags TEXT,
+    layout_code TEXT,
+    layout_style TEXT,
+    layout_javascript TEXT,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_modified TEXT NOT NULL,
+    view_count INTEGER DEFAULT 0,
+    featured INTEGER DEFAULT 0,
+    favorites INTEGER DEFAULT 0
+);
+
 DROP TABLE IF EXISTS users;
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -7,7 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_changed_at TEXT,
 
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL, 
+    last_activity TEXT NOT NULL, 
     last_login TEXT, 
 
     about_me TEXT, 
@@ -41,9 +64,45 @@ CREATE TABLE IF NOT EXISTS articles (
     created_at TEXT NOT NULL,
     last_modified TEXT NOT NULL,
     view_count INTEGER DEFAULT 0,
-    comments_count INTEGER DEFAULT 0,
     featured INTEGER DEFAULT 0,
     favorites INTEGER DEFAULT 0
+);
+
+DROP TABLE IF EXISTS favorites;
+CREATE TABLE IF NOT EXISTS favorites (
+    user_id INTEGER NOT NULL,
+    article_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, article_id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+DROP TABLE IF EXISTS poll_votes;
+DROP TABLE IF EXISTS poll_options;
+DROP TABLE IF EXISTS polls;
+
+CREATE TABLE IF NOT EXISTS polls (
+    poll_id INTEGER PRIMARY KEY AUTOINCREMENT, 
+    question TEXT NOT NULL,
+    author TEXT DEFAULT 'Anonymous',
+    created_at TEXT NOT NULL,
+    last_modified TEXT NOT NULL,
+    view_count INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS poll_options (
+    option_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_id INTEGER NOT NULL,
+    option TEXT NOT NULL,
+    FOREIGN KEY (poll_id) REFERENCES polls(poll_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS poll_votes (
+    vote_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    option_id INTEGER NOT NULL,
+    FOREIGN KEY (poll_id) REFERENCES polls(poll_id) ON DELETE CASCADE,
+    FOREIGN KEY (option_id) REFERENCES poll_options(option_id) ON DELETE CASCADE
 );
 
 DROP TABLE IF EXISTS edit_history;
@@ -60,7 +119,7 @@ CREATE TABLE IF NOT EXISTS edit_history (
 DROP TABLE IF EXISTS comments;
 CREATE TABLE IF NOT EXISTS comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    origin_type TEXT NOT NULL CHECK (origin_type IN ('article', 'blog', 'user_profile')),
+    origin_type TEXT NOT NULL CHECK (origin_type IN ('article', 'blog', 'user_profile', 'poll')),
     origin_id TEXT NOT NULL,
     commenter TEXT NOT NULL,
     created_at TEXT NOT NULL,

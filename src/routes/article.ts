@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { trimTrailingSlash } from 'hono/trailing-slash'
 import { addUserData } from '../util/data';
 import { verifyToken } from '../util/auth';
+import active from '../util/activity';
 
 const article = new Hono<{ Bindings: Bindings }>();
 
@@ -41,6 +42,7 @@ article
 
       const { results } = await c.env.DB.prepare("SELECT last_insert_rowid() AS id").all();
       const newID = results[0].id;
+      await active(c, decoded.user)
       return c.json({ message: 'Article created successfully', id: newID }, 201)
     } catch (error) {
       return c.json({ error: error });
@@ -85,6 +87,7 @@ article
       if(!success) {
         throw new Error('Something went wrong with creating your comment')
       }
+      await active(c, decoded.user)
 
       return c.json({ message: 'Comment created successfully' }, 201)
     } catch (error) {
@@ -103,7 +106,7 @@ article
       c.env.DB.prepare(`
           UPDATE articles SET view_count = view_count + 1 WHERE id = ?
       `).bind(id).run()
-      return c.json(results);
+      return c.json(results[0]);
     } catch (error) {
       return c.json({ message: 'Article does not exist' }, 404);
     }
@@ -192,7 +195,7 @@ article
           SELECT * FROM articles ORDER BY RANDOM() LIMIT 1
       `).all()
 
-      return c.json(results);
+      return c.json(results[0]);
     } catch (error) {
       return c.json({ message: 'No article found!' }, 404);
     }
@@ -266,6 +269,7 @@ article
       if(!success) {
         throw new Error('Something went wrong with updating your article')
       }
+      await active(c, decoded.user)
 
       return c.json({ message: 'Article updated successfully' }, 200)
     } catch (error) {
@@ -302,6 +306,7 @@ article
       if(!success) {
         throw new Error('Something went wrong with deleting your article')
       }
+      await active(c, decoded.user)
 
       return c.json({ message: 'Article deleted successfully' }, 200)
     } catch (error) {

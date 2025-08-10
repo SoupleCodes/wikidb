@@ -3,6 +3,7 @@ import { verify } from 'hono/jwt';
 
 interface JwtPayload {
   user: string;
+  id: number;
   role: string;
   exp: number;
 }

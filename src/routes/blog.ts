@@ -50,16 +50,15 @@ blog
 
         const { success } = await c.env.DB.prepare(`
             INSERT INTO blogs
-                (title, author, content, parent, part, description, created_at, last_modified, tags, comments_enabled, style, includeglobal, music)
+                (title, author, content, parent, part, created_at, last_modified, tags, comments_enabled, style, includeglobal, music)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
             title,
             author,
             content,
             rest.parent,
             rest.part,
-            rest.description,
             new Date().toISOString(),
             new Date().toISOString(),
             JSON.stringify(rest.tags),

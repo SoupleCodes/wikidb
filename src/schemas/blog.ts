@@ -4,7 +4,6 @@ interface Blog {
     content: string
     parent?: number
     part?: number
-    description?: string
     tags?: string | string[] | null
     comments_enabled?: number | boolean
     style?: string

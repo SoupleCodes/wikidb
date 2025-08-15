@@ -7,4 +7,5 @@ interface Article {
     created_at: string;
     last_modified: string;
     view_count: number;
+    favorites: number
 }

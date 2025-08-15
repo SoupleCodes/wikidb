@@ -133,6 +133,9 @@ root
         const { results: articles } = await c.env.DB.prepare(`
             SELECT COUNT(*) as total FROM articles
         `).all()
+        const { results: themes } = await c.env.DB.prepare(`
+            SELECT COUNT(*) as total FROM themes  
+        `).all()
         const { results: blogs } = await c.env.DB.prepare(`
           SELECT COUNT(*) as total FROM blogs
         `).all()
@@ -144,6 +147,7 @@ root
         `).all()
 
         const articlesCount = articles[0].total
+        const themesCount = themes[0].total
         const blogsCount = blogs[0].total
         const usersCount = users[0].total
         const pollsCount = polls[0].total
@@ -151,6 +155,7 @@ root
         return c.json({ 
           stats: {
             articles: articlesCount,
+            themes: themesCount,
             blogs: blogsCount,
             users: usersCount,
             polls: pollsCount

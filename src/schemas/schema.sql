@@ -1,24 +1,21 @@
-PRAGMA foreign_keys = false;
-PRAGMA foreign_key_check;
-
 DROP TABLE IF EXISTS themes;
 CREATE TABLE IF NOT EXISTS themes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
-    author TEXT DEFAULT 'Anonymous',
-    reviewer TEXT DEFAULT 'Anonymous',
-    thumbnail TEXT,
-    color TEXT,
+    author TEXT,
+    reviewer TEXT DEFAULT 'Not Given',
+    thumbnail TEXT DEFAULT '',
     tags TEXT,
-    layout_code TEXT,
-    layout_style TEXT,
-    layout_javascript TEXT,
-    content TEXT NOT NULL,
+    layout_html TEXT DEFAULT '',
+    layout_style TEXT DEFAULT '',
+    layout_javascript TEXT DEFAULT '',
+    content TEXT DEFAULT '',
     created_at TEXT NOT NULL,
     last_modified TEXT NOT NULL,
     view_count INTEGER DEFAULT 0,
     featured INTEGER DEFAULT 0,
-    favorites INTEGER DEFAULT 0
+    favorites INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'pending'
 );
 
 DROP TABLE IF EXISTS users;
@@ -58,7 +55,7 @@ DROP TABLE IF EXISTS articles;
 CREATE TABLE IF NOT EXISTS articles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
-    author TEXT DEFAULT 'Anonymous',
+    author TEXT,
     subject TEXT DEFAULT 'Other' CHECK (subject IN ('Other', 'Technology', 'Gaming', 'Food', 'Animals', 'Websites', 'Music', 'Bands', 'Software', 'Souple', 'Biography', 'Science', 'Geography', 'History', 'Literature', 'Media', 'Sports & Recreation', 'Art & Design', 'Astronomy', 'Chemistry', 'Computer Science', 'Education', 'Film')),
     content TEXT NOT NULL,
     created_at TEXT NOT NULL,
@@ -83,7 +80,7 @@ DROP TABLE IF EXISTS polls;
 CREATE TABLE IF NOT EXISTS polls (
     poll_id INTEGER PRIMARY KEY AUTOINCREMENT, 
     question TEXT NOT NULL,
-    author TEXT DEFAULT 'Anonymous',
+    author TEXT,
     created_at TEXT NOT NULL,
     last_modified TEXT NOT NULL,
     view_count INTEGER DEFAULT 0
@@ -119,7 +116,7 @@ CREATE TABLE IF NOT EXISTS edit_history (
 DROP TABLE IF EXISTS comments;
 CREATE TABLE IF NOT EXISTS comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    origin_type TEXT NOT NULL CHECK (origin_type IN ('article', 'blog', 'user_profile', 'poll')),
+    origin_type TEXT NOT NULL,
     origin_id TEXT NOT NULL,
     commenter TEXT NOT NULL,
     created_at TEXT NOT NULL,
@@ -134,8 +131,7 @@ CREATE TABLE IF NOT EXISTS blogs (
     title TEXT, 
     parent INTEGER DEFAULT 0, 
     part INTEGER DEFAULT 0 CHECK (part = 0 OR (part > 0 AND parent != 0)),
-    description TEXT DEFAULT '', 
-    author TEXT DEFAULT 'Anonymous', 
+    author TEXT, 
     content TEXT, 
     created_at TEXT, 
     last_modified TEXT, 

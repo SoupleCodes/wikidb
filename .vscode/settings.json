@@ -2,5 +2,7 @@
 	"files.associations": {
 		"wrangler.json": "jsonc"
 	},
-	"IDX.aI.enableInlineCompletion": false
+	"IDX.aI.enableInlineCompletion": false,
+	"IDX.aI.enableCodebaseIndexing": false,
+	"IDX.aI.showChatInEditorTab": false,
 }

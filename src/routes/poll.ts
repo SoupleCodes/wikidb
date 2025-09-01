@@ -185,7 +185,7 @@ poll
       // options = parseIfArray(results[0].options as unknown as string)
       
       // Add one view
-      c.env.DB.prepare(`
+      await c.env.DB.prepare(`
           UPDATE polls SET view_count = view_count + 1 WHERE id = ?
       `).bind(id).run()
 

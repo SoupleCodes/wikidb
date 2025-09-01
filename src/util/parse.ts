@@ -1,12 +1,10 @@
 export function parseIfArray(arrString: string) {
-    if (!arrString || arrString == '') {
-        return [];
-    }
     try {
         const parsed = JSON.parse(arrString)
         return Array.isArray(parsed) ? parsed : []
     } catch (error) {
-        console.error('Failed to parse DB JSON:', error)
+        console.error('Failed to parse DB JSON ARRAY:', error)
+        console.log(arrString)
         return [];
     }
 }

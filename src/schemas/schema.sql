@@ -29,11 +29,13 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL,
     last_activity TEXT NOT NULL, 
     last_login TEXT, 
+    revoked_at TEXT,
 
     about_me TEXT, 
     display_name TEXT,
     view_count INTEGER DEFAULT 0,
     pfp_url TEXT, 
+    banner_url TEXT,
     signature TEXT, 
     location TEXT, 
     social_links TEXT, 

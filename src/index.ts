@@ -8,6 +8,7 @@ import poll from './routes/poll';
 import user from './routes/user';
 import root from './routes/root'
 import all from './routes/all'
+import me from './routes/me';
 
 const app = new Hono<{ Bindings: Bindings }>();
 app.use('/*', cors());
@@ -19,5 +20,6 @@ app.route('/blog', blog)
 app.route('/user', user)
 app.route('/poll', poll)
 app.route('/all', all)
+app.route('/me', me)
 
 export default app;

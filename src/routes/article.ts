@@ -31,7 +31,7 @@ article
       `).bind(
           title,
           author,
-          '',
+          data.subject || 'Other',
           content,
           new Date().toISOString(),
           new Date().toISOString()
@@ -42,6 +42,23 @@ article
 
       const { results } = await c.env.DB.prepare("SELECT last_insert_rowid() AS id").all();
       const newID = results[0].id;
+
+      const historySuccess = await c.env.DB.prepare(`
+        INSERT INTO edit_history
+          (article_id, editor, edit_date, edit_content, old_content)
+        VALUES
+          (?, ?, ?, ?, ?)
+      `).bind(
+        newID,
+        decoded.user,
+        new Date().toISOString(),
+        content,
+        ''
+      ).run()
+      if(!historySuccess) {
+        throw new Error('Something went wrong with appending your article history')
+      }
+
       await active(c, decoded.user)
       return c.json({ message: 'Article created successfully', id: newID }, 201)
     } catch (error) {
@@ -91,7 +108,43 @@ article
 
       return c.json({ message: 'Comment created successfully' }, 201)
     } catch (error) {
+      console.error(error)
       return c.json({ message: 'Something went wrong with creating your comment' }, 500)
+    }
+  })
+
+  .get('/featured', async (c) => {
+    try {
+      const { results } = await c.env.DB.prepare(`
+          SELECT * FROM articles WHERE featured = 1 ORDER BY RANDOM() LIMIT 1
+      `).all()
+      return c.json(results[0]);
+    } catch (error) {
+      console.error(error)
+      return c.json({ message: 'No featured article found!' }, 404)
+    }
+  })
+
+  .get('/random', async (c) => {
+    try {
+      const { results } = await c.env.DB.prepare(`
+          SELECT * FROM articles ORDER BY RANDOM() LIMIT 1
+      `).all()
+
+      return c.json(results[0]);
+    } catch (error) {
+      return c.json({ message: 'No article found!' }, 404);
+    }
+  })
+
+  .get('/popular', async (c) => {
+    try {
+      const { results } = await c.env.DB.prepare(`
+          SELECT * FROM (SELECT * FROM articles ORDER BY view_count DESC LIMIT 10) ORDER BY RANDOM() LIMIT 1
+      `).all()
+      return c.json(results[0]);
+    } catch (error) {
+      return c.json({ message: 'No articles found!' }, 404)
     }
   })
 
@@ -103,34 +156,12 @@ article
       `).bind(id).all();
 
       // Add one view
-      c.env.DB.prepare(`
+      await c.env.DB.prepare(`
           UPDATE articles SET view_count = view_count + 1 WHERE id = ?
       `).bind(id).run()
       return c.json(results[0]);
     } catch (error) {
       return c.json({ message: 'Article does not exist' }, 404);
-    }
-  })
-
-  .get('/featured', async (c) => {
-    try {
-      const { results } = await c.env.DB.prepare(`
-          SELECT * FROM articles WHERE featured = 1
-      `).all()
-      return c.json(results);
-    } catch (error) {
-      return c.json({ message: 'No featured article found!' }, 404)
-    }
-  })
-
-  .get('/popular', async (c) => {
-    try {
-      const { results } = await c.env.DB.prepare(`
-          SELECT * FROM articles ORDER BY view_count DESC LIMIT 10
-      `).all()
-      return c.json(results);
-    } catch (error) {
-      return c.json({ message: 'No articles found!' }, 404)
     }
   })
 
@@ -186,18 +217,6 @@ article
       return c.json(results);
     } catch (error) {
       return c.json({ message: 'Article does not exist' }, 404);
-    }
-  })
-
-  .get('/random', async (c) => {
-    try {
-      const { results } = await c.env.DB.prepare(`
-          SELECT * FROM articles ORDER BY RANDOM() LIMIT 1
-      `).all()
-
-      return c.json(results[0]);
-    } catch (error) {
-      return c.json({ message: 'No article found!' }, 404);
     }
   })
 

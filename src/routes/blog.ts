@@ -57,15 +57,15 @@ blog
             title,
             author,
             content,
-            rest.parent,
-            rest.part,
+            rest.parent || null,
+            rest.part || null,
             new Date().toISOString(),
             new Date().toISOString(),
-            JSON.stringify(rest.tags),
+            JSON.stringify(rest.tags || []),
             rest.comments_enabled || 1,
-            rest.style,
-            rest.includeglobal,
-            JSON.stringify(rest.music)
+            rest.style || null,
+            rest.includeglobal || false,
+            JSON.stringify(rest.music) || null
         ).run()
         if(!success) {
             throw new Error('Failed to submit blog')
@@ -95,10 +95,13 @@ blog
     }
   
     const { results } = await c.env.DB.prepare(`
-      SELECT 1 FROM blogs WHERE id = ?
+      SELECT comments_enabled FROM blogs WHERE id = ?
     `).bind(id).all()
     if(results.length === 0) {
       return c.json({ message: 'Blog does not exist' }, 404)
+    }
+    if (!results[0].comments_enabled) {
+      return c.json({ message: 'Comments are disabled for this poll!' }, 409)
     }
 
     try {
@@ -122,8 +125,35 @@ blog
   
         return c.json({ message: 'Comment created successfully' }, 201)
       } catch (error) {
+        console.error(error)
         return c.json({ message: 'Something went wrong with creating your comment' }, 500)
       }
+  })
+
+  .get('/latest', async (c) => {
+    try {
+      const { results } = await c.env.DB.prepare(`
+          SELECT
+              b.*,
+              COUNT(c.origin_id) AS comment_count
+            FROM blogs AS b
+            LEFT JOIN comments AS c
+              ON b.id = c.origin_id
+            GROUP BY
+              b.id
+            ORDER BY b.created_at DESC
+            LIMIT 8
+      `).all();
+      results[0].tags = parseIfArray(results[0].tags as unknown as string)
+      results[0].music = parseIfJSON(results[0].music as unknown as string)
+
+      let blogs = await addUserData(results, c.env.DB)
+      
+      return c.json(blogs);
+    } catch (error) {
+      console.error(error)
+      return c.json({ message: 'Blog does not exist' }, 404);
+    }
   })
 
   .get('/:id', async (c) => {
@@ -136,12 +166,15 @@ blog
       results[0].music = parseIfJSON(results[0].music as unknown as string)
       
       // Add one view
-      c.env.DB.prepare(`
+      await c.env.DB.prepare(`
           UPDATE blogs SET view_count = view_count + 1 WHERE id = ?
       `).bind(id).run()
+
+      let blog = await addUserData(results, c.env.DB)
       
-      return c.json(results[0]);
+      return c.json(blog[0]);
     } catch (error) {
+      console.error(error)
       return c.json({ message: 'Blog does not exist' }, 404);
     }
   })

@@ -9,10 +9,11 @@ interface User {
     display_name?: string;
     view_count?: number;
     pfp_url?: string;
+    banner_url?: string;
     signature?: string;
     location?: string;
     social_links?: string | string[];
     fav_articles?: string | number[];
-    music?: string[];
+    music?: string[] | string;
     style?: string;
 }

@@ -3,6 +3,7 @@ import { decode, sign, verify } from 'hono/jwt'
 import bcrypt = require("bcryptjs")
 import { trimTrailingSlash } from 'hono/trailing-slash'
 import { parseIfJSON, parseIfArray } from '../util/parse';
+import { verifyToken } from '../util/auth';
 
 const root = new Hono<{ Bindings: Bindings }>();
 
@@ -35,9 +36,9 @@ root
     // Create user
     const now = new Date().toISOString()
     const { success } = await c.env.DB.prepare(`
-        INSERT INTO users (username, lowercase_username, password_hash, password_changed_at, created_at, last_activity)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(username, lowercaseUsername, passwordHash, now, now, now).run()
+        INSERT INTO users (username, lowercase_username, display_name, password_hash, password_changed_at, created_at, last_activity)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(username, lowercaseUsername, '', passwordHash, now, now, now).run()
     if(!success) {
         return c.json({ message: 'Failed to create user' }, 400)
     }
@@ -49,79 +50,100 @@ root
     const data = await c.req.json()
     const { username, password } = data
 
-    // Checks
-    if (!username || !password) {
-      return c.json({ message: 'Username or password is missing' }, 400)
-    }
-    const lowercaseUsername = username.toLowerCase()
-    const userExists = await c.env.DB.prepare(`
-        SELECT password_hash, id FROM users WHERE lowercase_username = ?
-    `).bind(lowercaseUsername).first()
-    if(!userExists) {
-        return c.json({ message: 'User not found' }, 404)
-    }
-
-    // Check if correct password
-    const passwordMatch = await bcrypt.compare(password, userExists.password_hash as string)
-    if(!passwordMatch) {
-        return c.json({ message: 'Incorrect password' }, 401)
-    }
-
-    // Time to create token!
-    const now = new Date().toISOString()
-    const payload = {
-        user: lowercaseUsername,
-        id: userExists.id,
-        role: 'user',
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
-    }
-    const token = await sign(payload, c.env.JWT_SECRET);
-
-    // Update last login
-    await c.env.DB.prepare(`
-        UPDATE users SET 
-                      last_login = ?,
-                      created_at = ?,
-                      last_activity = ? 
-        WHERE lowercase_username = ?
-    `).bind(now, now, now, lowercaseUsername).run()
-
-    // Gather user info
-    const userInfo: User | undefined = await c.env.DB.prepare(`
-        SELECT
-            id,
-            username,
-            lowercase_username,
-            created_at,
-            last_activity,
-            last_login,
-            about_me,
-            display_name,
-            view_count,
-            pfp_url,
-            signature,
-            location,
-            social_links,
-            fav_articles,
-            music,
-            style
-        FROM users WHERE lowercase_username = ?
-    `).bind(lowercaseUsername).first()
-
-    if (userInfo) {
-      userInfo.social_links = parseIfJSON(userInfo.social_links as unknown as string);
-      userInfo.fav_articles = parseIfJSON(userInfo.fav_articles as unknown as string);
-      userInfo.music = parseIfArray(userInfo.music as unknown as string);
-    }
-
-    // Return response with token and user data
-    return c.json({
-      message: 'Successfully logged in',
-      token,
-      user: {
-        ...userInfo,  
+    try {
+      // Checks
+      if (!username || !password) {
+        return c.json({ message: 'Username or password is missing' }, 400)
       }
-    })
+      const lowercaseUsername = username.toLowerCase()
+      const userExists = await c.env.DB.prepare(`
+          SELECT password_hash, id FROM users WHERE lowercase_username = ?
+      `).bind(lowercaseUsername).first()
+      if(!userExists) {
+          return c.json({ message: 'User not found' }, 404)
+      }
+
+      // Check if correct password
+      const passwordMatch = await bcrypt.compare(password, userExists.password_hash as string)
+      if(!passwordMatch) {
+          return c.json({ message: 'Incorrect password' }, 401)
+      }
+
+      // Time to create token!
+      const now = new Date().toISOString()
+      const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24
+      const payload = {
+          user: lowercaseUsername,
+          id: userExists.id,
+          role: 'user',
+          exp: exp
+      }
+      const token = await sign(payload, c.env.JWT_SECRET);
+
+      // Update last login
+      await c.env.DB.prepare(`
+          UPDATE users SET 
+                        last_login = ?,
+                        last_activity = ?,
+                        revoked_at = NULL
+          WHERE lowercase_username = ?
+      `).bind(now, now, lowercaseUsername).run()
+
+      // Gather user info
+      const userInfo: User | undefined = await c.env.DB.prepare(`
+          SELECT
+              id,
+              username,
+              lowercase_username,
+              created_at,
+              last_activity,
+              last_login,
+              about_me,
+              display_name,
+              view_count,
+              pfp_url,
+              banner_url,
+              signature,
+              location,
+              social_links,
+              fav_articles,
+              music,
+              style
+          FROM users WHERE lowercase_username = ?
+      `).bind(lowercaseUsername).first()
+
+      if (userInfo) {
+        userInfo.social_links = parseIfJSON(userInfo.social_links as unknown as string);
+        userInfo.fav_articles = parseIfJSON(userInfo.fav_articles as unknown as string);
+        userInfo.music = parseIfArray(userInfo.music as unknown as string);
+      }
+
+      // Return response with token and user data
+      return c.json({
+        message: 'Successfully logged in',
+        token,
+        user: {
+          ...userInfo,  
+        }
+      })
+    } catch (error) {
+      console.log('Error logging in:' + error)
+    }
+  })
+
+  .patch('/logout', async (c) => {
+    // Auth
+    const decoded = await verifyToken(c)
+    if (!decoded) {
+      return c.json({ message: 'Unauthorized' }, 401)
+    }
+
+    await c.env.DB.prepare(`
+      UPDATE users SET 
+                    revoked_at = ?
+      WHERE lowercase_username = ?
+  `).bind(Math.floor(Date.now() / 1000) + 60 * 60 * 24, decoded.user).run()
+
   })
   
   .get('/ping', async (c) => { 

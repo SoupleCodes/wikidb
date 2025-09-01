@@ -25,6 +25,7 @@ user
                 display_name,
                 view_count,
                 pfp_url,
+                banner_url,
                 signature,
                 location,
                 social_links,
@@ -33,19 +34,70 @@ user
                 style
             FROM users WHERE lowercase_username = ?
         `).bind(lowercasedUsername).all()
+        console.log(results[0])
         results[0].social_links = parseIfArray(results[0].social_links as unknown as string)
         results[0].fav_articles = parseIfArray(results[0].fav_articles as unknown as string)
-        results[0].music = parseIfArray(results[0].fav_music as unknown as string)
+        results[0].music = parseIfArray(results[0].music as unknown as string)
 
         // Add one view
-        c.env.DB.prepare(`
+        await c.env.DB.prepare(`
             UPDATE users SET view_count = view_count + 1
                          WHERE lowercase_username = ?
         `).bind(lowercasedUsername).run()
 
         return c.json(results[0])
     } catch (error) {
+        console.error(error)
         return c.json({ message: 'Something went wrong with getting this user' }, 404)
+    }
+  })
+
+  .get('/:username/recent/articles', async (c) => {
+    const { username } = c.req.param()
+    const lowercasedUsername = username.toLowerCase()
+
+    try {
+        const { results } = await c.env.DB.prepare(`
+            SELECT DISTINCT a.title, a.id, a.author
+            FROM articles AS a
+            JOIN edit_history AS h
+              ON a.id = h.article_id
+            WHERE 
+              LOWER(author) = ?
+            ORDER BY h.edit_date DESC
+        `).bind(lowercasedUsername).all()
+
+        return c.json(results)
+    } catch (err) {
+      console.log(err)
+      return c.json({ message: 'Server troubles!' }, err)
+    }
+  })
+
+  .get('/:username/recent/comments', async (c) => {
+    const { username } = c.req.param();
+    const lowercasedUsername = username.toLowerCase();
+    try {
+      const { results }: { results: Comment[] } = await c.env.DB.prepare(`
+          SELECT 
+            c.commenter as author, 
+            c.content as comment,
+            c.id as comment_id,
+            b.title as blog_title,
+            b.id as blog_id
+          FROM comments as c
+          LEFT JOIN blogs as b ON c.origin_id = b.id
+          WHERE 
+          	c.origin_type = 'blog'
+            AND b.author = ?
+          ORDER BY c.created_at DESC
+          LIMIT 8 OFFSET 0
+      `).bind(lowercasedUsername).all();
+
+      return c.json(results);
+    } catch (error) {
+      console.error(error)
+      return c.json({ message: 'User does not exist' }, 404);
     }
   })
 
@@ -55,9 +107,17 @@ user
 
     try {
         const { results } = await c.env.DB.prepare(`
-            SELECT * FROM ARTICLES
-            WHERE author = ?
-            ORDER BY created_at DESC
+            SELECT
+              a.*,
+              COUNT(c.origin_id) AS comment_count
+            FROM articles AS a
+            LEFT JOIN comments AS c
+              ON a.id = c.origin_id
+            WHERE
+              LOWER(a.author) = ?
+            GROUP BY
+              a.id
+            ORDER BY a.created_at DESC
             LIMIT 25 OFFSET ?
         `).bind(lowercasedUsername, (parseInt(page) - 1) * 25).all()
         const { results: [{ total }] } = await c.env.DB.prepare(`
@@ -81,11 +141,30 @@ user
 
     try {
         const { results } = await c.env.DB.prepare(`
-            SELECT * FROM blogs 
-            WHERE LOWER(author) = ? 
-            ORDER BY created_at DESC 
-            LIMIT 25 OFFSET ?
+            SELECT
+            b.*,
+            COUNT(c.origin_id) AS comment_count
+FROM blogs AS b
+LEFT JOIN comments AS c ON b.id = c.origin_id AND c.origin_type = 'blog'
+WHERE
+LOWER(b.author) = 'souple'
+GROUP BY
+              b.id
+            ORDER BY b.created_at DESC
+
         `).bind(lowercasedUsername, (parseInt(page) - 1) * 25).all()
+
+        const { results: archive } = await c.env.DB.prepare(`
+            SELECT
+              STRFTIME('%m', blogs.created_at) AS month,
+              STRFTIME('%Y', blogs.created_at) AS year,
+              COUNT(id) AS count
+            FROM blogs
+            WHERE LOWER(author) = ?
+            GROUP BY
+              STRFTIME('%m-%Y', blogs.created_at)
+            ORDER BY month DESC
+        `).bind(lowercasedUsername).all()
 
         for (const blog of results) {
             blog.tags = parseIfArray(blog.tags as unknown as string)
@@ -97,12 +176,15 @@ user
             WHERE LOWER(author) = ?
         `).bind(lowercasedUsername).all()
         const totalPages = Math.ceil(Number(total) / 25);
+
         return c.json({
             blogs: results,
             totalPages,
-            totalBlogs: total
+            totalBlogs: total,
+            archive: archive
         })
     } catch (error) {
+        console.error(error)
         return c.json({ message: 'There was something wrong with getting this user\'s blogs' }, 404)
     }
   })
@@ -113,7 +195,7 @@ user
       const { results }: { results: Comment[] } = await c.env.DB.prepare(`
           SELECT * FROM comments WHERE origin_type = ? AND origin_id = ?
           ORDER BY created_at ASC
-      `).bind('user_profile', user).all();
+      `).bind('user', user).all();
 
       let comments = await addUserData(results, c.env.DB)
       return c.json(comments);
@@ -129,13 +211,29 @@ user
 
     try {
       const { results } = await c.env.DB.prepare(`
-        SELECT follower FROM follows WHERE following = ?
+        SELECT follower AS user FROM follows WHERE following = ?
       `).bind(lowercaseUsername).all()
 
       const followers = await addUserData(results, c.env.DB)
       return c.json(followers)
     } catch (error) {
       return c.json({ message: 'Something went wrong with getting user\'s followers' }, 404)
+    }
+  })
+
+  .get('/:username/following', async (c) => {
+    const { username } = c.req.param()
+    const lowercaseUsername = username.toLowerCase()
+
+    try {
+      const { results } = await c.env.DB.prepare(`
+        SELECT following AS user FROM follows WHERE follower = ?
+      `).bind(lowercaseUsername).all()
+
+      const following = await addUserData(results, c.env.DB)
+      return c.json(following)
+    } catch (error) {
+      return c.json({ message: 'Something went wrong with getting who the user followed' }, 404)
     }
   })
 
@@ -164,10 +262,14 @@ user
     }
 
     const { results } = await c.env.DB.prepare(`
-      SELECT 1 FROM users WHERE lowercase_username = ?
-    `).bind(lowercaseUsername).first()
-    if(results) {
+      SELECT comments_enabled FROM users WHERE lowercase_username = ?
+    `).bind(lowercaseUsername).all()
+    if(results.length === 0) {
       return c.json({ message: 'User does not exist' }, 404)
+    }
+    console.log(results)
+    if (!results[0].comments_enabled) {
+      return c.json({ message: 'Comments are disabled for this profile!' }, 409)
     }
 
     try {
@@ -177,7 +279,7 @@ user
         VALUES
           (?, ?, ?, ?, ?)
       `).bind(
-        'user_profile',
+        'user',
         username,
         decoded.user,
         new Date().toISOString(),
@@ -275,102 +377,6 @@ user
     }
 
 
-  })
-
-  .patch('/:username', async (c) => {
-    // Auth
-    const decoded = await verifyToken(c)
-    if (!decoded) {
-      return c.json({ message: 'Unauthorized' }, 401)
-    }
-
-    const { username } = c.req.param()
-    const lowercaseUsername = username.toLowerCase()
-    const data: User = await c.req.json()
-    if (decoded.user.toLowerCase() !== lowercaseUsername) {
-      return c.json({ message: 'You can\'t edit someone else\'s profile silly!' }, 403)
-    }
-
-    let { about_me, display_name, pfp_url, signature, location, social_links, fav_articles, music, style } = data
-
-    try {
-      const updates: string[] = [];
-      const bindings: (string | number | null)[] = [];
-
-      function f(column: string) {
-        if (data[column] && (data[column] !== undefined) && (data[column] !== null)) {
-            updates.push(column + " = ?");
-            bindings.push(data[column]);
-            return true
-        }
-        return false
-      }
-
-      f("about_me"), f("display_name"), f("signature"),
-      f("location"), f("style")
-
-      if (pfp_url && !(/^https?:\/\/.+/.test(pfp_url))) {
-        return c.json({ message: 'Invalid pfp_url format'}, 404)
-      } f("pfp_url")
-
-      if (social_links && !Array.isArray(social_links)) {
-        return c.json({ message: 'social_links must be an array'}, 404)
-      } f("social_links")
-
-      if (music && music !== undefined) {
-        if (!Array.isArray(music)) {
-            return c.json({ message: 'music must be an array'}, 404)
-        }
-        const musicArray = music as unknown as Music[]
-        for (const musicObject of musicArray) {
-            if (typeof musicObject !== 'object' ||
-                typeof musicObject.artist_name !== 'string' || 
-                typeof musicObject.song_name !== 'string' || 
-                typeof musicObject.song_url !== 'string' || 
-                typeof musicObject.published !== 'number' || 
-                (musicObject.cover_art !== undefined && typeof musicObject.cover_art !== 'string') || 
-                (musicObject.album !== undefined && typeof musicObject.album !== 'string')) {
-                
-                throw new Error("Music object must have artist_name, song_name, song_url, published, and cover_art with valid types.");
-            }
-        }
-        f("music")
-      }
-
-      if (fav_articles) {
-        if(!Array.isArray(fav_articles)) {
-          return c.json({ message: 'fav_articles must be an array'}, 404)
-        }
-        if (fav_articles.length > 0) {
-          const checkAllNums = fav_articles.every(id => typeof id === 'number')
-          if (!checkAllNums) {
-              throw new Error('All values in fav_articles must be numbers')
-          }
-          f("fav_articles")
-        }
-      } 
-        
-      if(updates.length === 0) {
-          return c.json({ message: 'No data to update'}, 400)
-      }
-      const { success } = await c.env.DB.prepare(`
-          UPDATE users SET
-              ${updates.join(', ')}
-          WHERE lowercase_username = ?
-      `).bind(
-          ...bindings,
-          lowercaseUsername
-      ).run()
-
-      if(!success) {
-          throw new Error('Something went wrong with updating your profile')
-      }
-      await active(c, decoded.user)
-
-      return c.json({ message: 'Profile updated successfully' }, 200)
-    } catch (error) {
-      return c.json({ message: 'Something went wrong with updating your profile'}, 404)
-    }
   })
 
 export default user

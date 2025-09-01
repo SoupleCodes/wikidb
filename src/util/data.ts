@@ -5,7 +5,7 @@ export async function addUserData(objects: any[], db: D1Database) {
     const newArray = [];
 
     for (const object of objects) {
-        const username = (object.commenter || object.follower).toLowerCase();
+        const username = (object.commenter || object.user || object.author).toLowerCase();
         let userData = userDataMap.get(username);
 
         if (!userData) {
@@ -16,6 +16,7 @@ export async function addUserData(objects: any[], db: D1Database) {
                     about_me,
                     display_name,
                     pfp_url,
+                    banner_url,
                     signature,
                     location
                 FROM users WHERE lowercase_username = ?

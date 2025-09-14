@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS polls (
     author TEXT,
     created_at TEXT NOT NULL,
     last_modified TEXT NOT NULL,
-    view_count INTEGER DEFAULT 0
+    view_count INTEGER DEFAULT 0,
+    options TEXT
 );
 
 CREATE TABLE IF NOT EXISTS poll_options (
@@ -144,6 +145,19 @@ CREATE TABLE IF NOT EXISTS blogs (
     music TEXT, 
     includeglobal INTEGER DEFAULT 0
 );
+
+DROP TABLE IF EXISTS inbox;
+CREATE TABLE IF NOT EXISTS inbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+    sender TEXT, 
+    recipient TEXT, 
+    mail_type TEXT, 
+    content TEXT, 
+    created_at TEXT, 
+    read_status INTEGER DEFAULT 0, 
+    origin_type TEXT NOT NULL,
+    origin_id TEXT NOT NULL
+)
 
 CREATE INDEX IF NOT EXISTS idx_comments_origin ON comments (origin_type, origin_id);
 CREATE INDEX IF NOT EXISTS idx_article_history ON edit_history (article_id);

@@ -17,8 +17,8 @@ root
     if (!username || !password) {
       return c.json({ message: 'Username or password is missing' }, 400)
     }
-    if ((/\s/).test(password)) {
-      return c.json({ message: 'Password cannot contain spaces' }, 400)
+    if (!(/^[a-zA-Z0-9.\-_$@*!]{3,30}$/).test(password)) {
+      return c.json({ message: 'Password cannot contain spaces or newlines and must be at most 30 characters' }, 400)
     }
     const lowercaseUsername = username.toLowerCase()
     const { results: existingUser } = await c.env.DB.prepare(`
@@ -167,6 +167,27 @@ root
         const { results: polls } = await c.env.DB.prepare(`
           SELECT COUNT(*) as total FROM polls
         `).all()
+        
+        const { results: new_users } = await c.env.DB.prepare(`
+          SELECT 
+                id,
+                username,
+                created_at,
+                last_activity,
+                last_login,
+                about_me,
+                display_name,
+                view_count,
+                pfp_url,
+                banner_url,
+                signature,
+                location,
+                social_links,
+                fav_articles,
+                music,
+                style
+          FROM USERS ORDER BY created_at DESC LIMIT 6
+        `).all()
 
         const articlesCount = articles[0].total
         const themesCount = themes[0].total
@@ -174,14 +195,21 @@ root
         const usersCount = users[0].total
         const pollsCount = polls[0].total
 
+        for (const u of new_users) {
+           u.social_links = parseIfArray(u.social_links as unknown as string)
+           u.fav_articles = parseIfArray(u.fav_articles as unknown as string)
+           u.music = parseIfArray(u.music as unknown as string)
+        }
+
         return c.json({ 
           stats: {
             articles: articlesCount,
             themes: themesCount,
             blogs: blogsCount,
             users: usersCount,
-            polls: pollsCount
-          }
+            polls: pollsCount,
+          },
+          new_users
         })
     } catch (error) {
         console.error(error)

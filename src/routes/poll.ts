@@ -38,10 +38,8 @@ poll
       const { results } = await c.env.DB.prepare("SELECT last_insert_rowid() AS id").all();
       const newID = results[0].id;
       
-      console.log(options)
-      options = parseIfArray(options as string)
-      console.log(options)
-      options.map(async (option: string) => {
+      options = parseIfArray(options)
+      await Promise.all(options.map(async (option: string) => {
         await c.env.DB.prepare(`
           INSERT INTO poll_options
             (poll_id, option)
@@ -50,7 +48,7 @@ poll
         `)
           .bind(newID, option)
           .run()
-      })
+      }))
         
       return c.json({ message: 'Poll created successfully', id: newID }, 201)
     } catch (error) {
@@ -98,6 +96,7 @@ poll
   
         return c.json({ message: 'Comment created successfully' }, 201)
       } catch (error) {
+        console.error(error)
         return c.json({ message: 'Something went wrong with creating your comment' }, 500)
       }
   })
@@ -136,12 +135,22 @@ poll
     const { results: userVoted } = await c.env.DB.prepare(`
         SELECT * FROM poll_votes WHERE poll_id = ? AND user_id = ?
     `).bind(id, decoded.id).all()
-    if(userVoted.length > 0) {
-      return c.json({ message: 'You\'ve already voted on this poll'})
-    }
 
-    // Vote in poll
     try {
+      let oIndex = options[option - 1].option_id
+
+      // Remove pre-existing vote
+      if(userVoted.length > 0) {
+        await c.env.DB.prepare(`
+          DELETE FROM poll_votes
+          WHERE poll_id = ? AND user_id = ?
+        `).bind(
+          id,
+          decoded.id,
+        ).run()
+      }
+
+      // Add new vote
       await c.env.DB.prepare(`
         INSERT INTO poll_votes
           (poll_id, user_id, option_id)
@@ -150,10 +159,10 @@ poll
       `).bind(
         id,
         decoded.id,
-        options[option - 1].option_id
+        oIndex
       ).run()
-      await active(c, decoded.user)
 
+      await active(c, decoded.user)
       return c.json({ message: 'Vote created successfully' }, 201)
     } catch (error) {
       console.error(error)
@@ -164,13 +173,30 @@ poll
 
   .get('/:id', async (c) => {
     const id = c.req.param('id');
+    const decoded = await verifyToken(c)
+    let prepareStatement = 'SELECT * FROM polls WHERE poll_id = ?'
+    const bindings: (string | number | null)[] = [];
+    if (decoded) {
+      prepareStatement = `
+        SELECT
+           polls.*,    	
+          v.option_id AS user_vote
+        FROM polls
+        LEFT JOIN
+          poll_votes as v
+        ON
+          v.user_id = ? AND v.poll_id = ?
+      `
+      bindings.push(decoded.id, id)
+    } else {
+      bindings.push(id)
+    }
+
     try {
-      const { results } = await c.env.DB.prepare(`
-          SELECT * FROM polls WHERE poll_id = ?
-      `).bind(id).all();
+      const { results } = await c.env.DB.prepare(prepareStatement).bind(...bindings).all();
       let { results: options } = await c.env.DB.prepare(`
         SELECT
-           poll_options.option, COUNT(poll_votes.option_id) as count
+           poll_options.option, COUNT(poll_votes.option_id) as votes
         FROM
           poll_options
         LEFT JOIN
@@ -182,15 +208,16 @@ poll
         GROUP BY
           poll_options.option_id, poll_options.option
       `).bind(id).all()
-      // options = parseIfArray(results[0].options as unknown as string)
       
       // Add one view
       await c.env.DB.prepare(`
-          UPDATE polls SET view_count = view_count + 1 WHERE id = ?
+          UPDATE polls SET view_count = view_count + 1 WHERE poll_id = ?
       `).bind(id).run()
 
-      const pollData = results[0];
+      let poll = await addUserData(results, c.env.DB)
+      const pollData = poll[0];
       pollData.options = options;
+
       return c.json(pollData);
     } catch (error) {
       console.error(error)

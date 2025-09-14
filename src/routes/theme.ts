@@ -106,7 +106,7 @@ theme
           } catch (error) {
             return c.json({ message: 'Something went wrong with creating your comment' }, 500)
           }
-      })
+    })
 
 export default theme
 

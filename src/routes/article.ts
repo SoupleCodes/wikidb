@@ -116,7 +116,16 @@ article
   .get('/featured', async (c) => {
     try {
       const { results } = await c.env.DB.prepare(`
-          SELECT * FROM articles WHERE featured = 1 ORDER BY RANDOM() LIMIT 1
+        SELECT
+          a.*,
+          COUNT(c.origin_id) AS comment_count
+        FROM articles AS a
+        LEFT JOIN comments AS c ON a.id = c.origin_id AND c.origin_type = 'article'
+        WHERE featured = 1 
+        GROUP BY
+          a.id
+        ORDER BY RANDOM() 
+        LIMIT 1
       `).all()
       return c.json(results[0]);
     } catch (error) {
@@ -128,7 +137,15 @@ article
   .get('/random', async (c) => {
     try {
       const { results } = await c.env.DB.prepare(`
-          SELECT * FROM articles ORDER BY RANDOM() LIMIT 1
+        SELECT
+          a.*,
+          COUNT(c.origin_id) AS comment_count
+        FROM articles AS a
+        LEFT JOIN comments AS c ON a.id = c.origin_id AND c.origin_type = 'article'
+        GROUP BY
+          a.id
+        ORDER BY RANDOM() 
+        LIMIT 1
       `).all()
 
       return c.json(results[0]);
@@ -140,7 +157,15 @@ article
   .get('/popular', async (c) => {
     try {
       const { results } = await c.env.DB.prepare(`
-          SELECT * FROM (SELECT * FROM articles ORDER BY view_count DESC LIMIT 10) ORDER BY RANDOM() LIMIT 1
+          SELECT
+            a.*,
+            COUNT(c.origin_id) AS comment_count
+          FROM (SELECT * FROM articles ORDER BY view_count DESC LIMIT 10) AS a
+          LEFT JOIN comments AS c ON a.id = c.origin_id AND c.origin_type = 'article'
+          GROUP BY
+            a.id
+          ORDER BY RANDOM() 
+          LIMIT 1
       `).all()
       return c.json(results[0]);
     } catch (error) {
@@ -152,7 +177,14 @@ article
     const id = c.req.param('id');
     try {
       const { results } = await c.env.DB.prepare(`
-          SELECT * FROM articles WHERE id = ?
+          SELECT
+            a.*,
+            COUNT(c.origin_id) AS comment_count
+          FROM articles AS a
+          LEFT JOIN comments AS c ON a.id = c.origin_id AND c.origin_type = 'article'
+          WHERE a.id = ? 
+          GROUP BY
+            a.id
       `).bind(id).all();
 
       // Add one view

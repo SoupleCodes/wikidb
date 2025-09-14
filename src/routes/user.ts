@@ -89,7 +89,7 @@ user
           LEFT JOIN blogs as b ON c.origin_id = b.id
           WHERE 
           	c.origin_type = 'blog'
-            AND b.author = ?
+            AND LOWER(b.author) = ?
           ORDER BY c.created_at DESC
           LIMIT 8 OFFSET 0
       `).bind(lowercasedUsername).all();
@@ -111,8 +111,7 @@ user
               a.*,
               COUNT(c.origin_id) AS comment_count
             FROM articles AS a
-            LEFT JOIN comments AS c
-              ON a.id = c.origin_id
+            LEFT JOIN comments AS c ON a.id = c.origin_id AND c.origin_type = 'article'
             WHERE
               LOWER(a.author) = ?
             GROUP BY
@@ -144,13 +143,14 @@ user
             SELECT
             b.*,
             COUNT(c.origin_id) AS comment_count
-FROM blogs AS b
-LEFT JOIN comments AS c ON b.id = c.origin_id AND c.origin_type = 'blog'
-WHERE
-LOWER(b.author) = 'souple'
-GROUP BY
+            FROM blogs AS b
+            LEFT JOIN comments AS c ON b.id = c.origin_id AND c.origin_type = 'blog'
+            WHERE
+            LOWER(b.author) = ?
+            GROUP BY
               b.id
             ORDER BY b.created_at DESC
+            LIMIT 25 OFFSET ?
 
         `).bind(lowercasedUsername, (parseInt(page) - 1) * 25).all()
 
@@ -195,7 +195,7 @@ GROUP BY
       const { results }: { results: Comment[] } = await c.env.DB.prepare(`
           SELECT * FROM comments WHERE origin_type = ? AND origin_id = ?
           ORDER BY created_at ASC
-      `).bind('user', user).all();
+      `).bind('user', user.toLowerCase()).all();
 
       let comments = await addUserData(results, c.env.DB)
       return c.json(comments);
@@ -244,16 +244,6 @@ GROUP BY
       return c.json({ message: 'Unauthorized' }, 401)
     }
 
-    /*
-    curl -X POST \
-  http://localhost:8787/user/pizzatak/comment \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer >>TOKEN HERE<<" \
-  -d '{
-"comment": "pizza for lyfe"
-}'
-    */
-
     const { username } = c.req.param()
     const lowercaseUsername = username.toLowerCase()
     const { comment } = await c.req.json();
@@ -280,7 +270,7 @@ GROUP BY
           (?, ?, ?, ?, ?)
       `).bind(
         'user',
-        username,
+        lowercaseUsername,
         decoded.user,
         new Date().toISOString(),
         comment

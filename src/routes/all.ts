@@ -11,8 +11,14 @@ all
 
     try {
         const { results } = await c.env.DB.prepare(`
-            SELECT * FROM ARTICLES
-            ORDER BY created_at DESC
+            SELECT
+              a.*,
+              COUNT(c.origin_id) AS comment_count
+            FROM articles AS a
+            LEFT JOIN comments AS c ON a.id = c.origin_id AND c.origin_type = 'article'
+            GROUP BY
+              a.id
+            ORDER BY a.created_at DESC
             LIMIT 25 OFFSET ?
         `).bind(offset).all()
         const { results: [{ total }] } = await c.env.DB.prepare(`

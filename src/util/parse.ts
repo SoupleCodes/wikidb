@@ -1,7 +1,11 @@
-export function parseIfArray(arrString: string) {
+export function parseIfArray(arrString: string | string[]) {
     try {
-        const parsed = JSON.parse(arrString)
-        return Array.isArray(parsed) ? parsed : []
+        if (typeof arrString === 'string') {
+            let arr = JSON.parse(arrString)
+            return Array.isArray(arr) ? arr : []
+        } else {
+            return Array.isArray(arrString) ? arrString : []
+        }
     } catch (error) {
         console.error('Failed to parse DB JSON ARRAY:', error)
         console.log(arrString)

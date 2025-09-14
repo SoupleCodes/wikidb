@@ -24,7 +24,7 @@ me
       const bindings: (string | number | null)[] = [];
 
       function f(column: string, json?: boolean) {
-        if (data[column] && (data[column] !== undefined) && (data[column] !== null)) {
+        if ((data[column] !== undefined) && (data[column] !== null)) {
             updates.push(column + " = ?");
             if(json) {
               bindings.push(JSON.stringify(data[column]));
@@ -87,7 +87,7 @@ me
       } 
         
       if(updates.length === 0) {
-          return c.json({ message: 'No data to update'}, 400)
+          return c.json({ message: 'No data to update' }, 400)
       }
       const { success } = await c.env.DB.prepare(`
           UPDATE users SET

@@ -4,6 +4,6 @@ export default async function active(c: Context, username: string) {
     await c.env.DB.prepare(`
         UPDATE users
         SET last_activity = ?
-        WHERE username = ?
+        WHERE LOWER(username) = ?
     `).bind(new Date().toISOString(), username.toLowerCase()).run()
 }

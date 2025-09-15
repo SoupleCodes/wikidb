@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS themes (
     layout_javascript TEXT DEFAULT '',
     content TEXT DEFAULT '',
     created_at TEXT NOT NULL,
+    approved_at TEXT NOT NULL,
     last_modified TEXT NOT NULL,
     view_count INTEGER DEFAULT 0,
     featured INTEGER DEFAULT 0,
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_activity TEXT NOT NULL, 
     last_login TEXT, 
     revoked_at TEXT,
+    role DEFAULT 'user',
 
     about_me TEXT, 
     display_name TEXT,
@@ -41,7 +43,7 @@ CREATE TABLE IF NOT EXISTS users (
     social_links TEXT, 
     fav_articles TEXT,
     music TEXT,
-    style TEXT
+    style TEXT,
 );
 
 DROP TABLE IF EXISTS follows;
@@ -156,7 +158,9 @@ CREATE TABLE IF NOT EXISTS inbox (
     created_at TEXT, 
     read_status INTEGER DEFAULT 0, 
     origin_type TEXT NOT NULL,
-    origin_id TEXT NOT NULL
+    origin_id TEXT NOT NULL,
+    comment_id INTEGER,
+    FOREIGN KEY (comment_id) REFERENCES comments(id)
 )
 
 CREATE INDEX IF NOT EXISTS idx_comments_origin ON comments (origin_type, origin_id);

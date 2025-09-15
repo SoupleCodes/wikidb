@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import comment from './routes/comment'
 import article from './routes/article';
 import theme from './routes/theme';
+import inbox from './routes/inbox';
 import blog from './routes/blog';
 import poll from './routes/poll';
 import user from './routes/user';
@@ -17,6 +18,7 @@ app.route('/theme', theme)
 app.route('/comment', comment)
 app.route('/article', article);
 app.route('/blog', blog)
+app.route('/inbox', inbox)
 app.route('/user', user)
 app.route('/poll', poll)
 app.route('/all', all)

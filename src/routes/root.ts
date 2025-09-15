@@ -57,7 +57,7 @@ root
       }
       const lowercaseUsername = username.toLowerCase()
       const userExists = await c.env.DB.prepare(`
-          SELECT password_hash, id FROM users WHERE lowercase_username = ?
+          SELECT password_hash, id, role FROM users WHERE lowercase_username = ?
       `).bind(lowercaseUsername).first()
       if(!userExists) {
           return c.json({ message: 'User not found' }, 404)
@@ -75,7 +75,7 @@ root
       const payload = {
           user: lowercaseUsername,
           id: userExists.id,
-          role: 'user',
+          role: userExists.role,
           exp: exp
       }
       const token = await sign(payload, c.env.JWT_SECRET);

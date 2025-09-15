@@ -3,6 +3,8 @@ import { trimTrailingSlash } from 'hono/trailing-slash'
 import { verifyToken } from '../util/auth';
 import { parseIfArray } from '../util/parse';
 import active from '../util/activity';
+import sendinbox from '../util/sendinbox';
+import { addUserData } from '../util/data';
 
 const theme = new Hono<{ Bindings: Bindings }>()
 
@@ -108,19 +110,108 @@ theme
           }
     })
 
-export default theme
+    .post('/:id/use', async (c) => {
+        // Auth
+        const decoded = await verifyToken(c)
+        if (!decoded) {
+          return c.json({ message: 'Unauthorized' }, 401)
+        }
+        
+        const id = c.req.param('id')
+        const { results } = await c.env.DB.prepare(`
+          SELECT 1 FROM themes WHERE id = ?
+        `).bind(id).all()
+        if(results.length === 0) {
+          return c.json({ message: 'Theme does not exist' }, 404)
+        }
 
-/*
-curl -X POST \
-  http://localhost:8787/theme \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer >>TOKEN_HERE<<" \
-  -d '{
-"title": "Blank theme",
-"content": "turns ur page blank",
-"thumbnail": null,
-"tags": "[\"blank\"]",
-"layout_html": "",
-"layout_style": "display:none;"
-}'
-*/
+        try {
+          const { results: userTheme } = await c.env.DB.prepare(`
+            SELECT theme FROM users WHERE lowercase_username = ?
+          `).bind(decoded.user).all()
+
+          const sameTheme = userTheme[0].theme === id
+          const message = 'Successfully ' + (sameTheme ? 'removed' : 'set') + ' theme!'
+          await c.env.DB.prepare(`
+            UPDATE users
+              SET theme = ?
+            WHERE lowercase_username = ?
+          `).bind((sameTheme ? null : id), decoded.user).run()
+
+          return c.json({ message: message }, 404)
+        } catch (error) {
+          return c.json({ message: 'Having trouble selecting this theme' }, 400)
+        }
+    })
+
+    .get('/:id', async (c) => {
+    const id = c.req.param('id');
+    try {
+      const { results } = await c.env.DB.prepare(`
+          SELECT * FROM themes WHERE id = ?
+      `).bind(id).all();
+      results[0].tags = parseIfArray(results[0].tags as unknown as string)
+      
+      // Add one view
+      await c.env.DB.prepare(`
+          UPDATE themes SET view_count = view_count + 1 WHERE id = ?
+      `).bind(id).run()
+
+      let theme = await addUserData(results, c.env.DB)
+      
+      return c.json(theme[0]);
+    } catch (error) {
+      console.error(error)
+      return c.json({ message: 'Theme does not exist' }, 404);
+    }
+    })
+
+    .get('/pending', async (c) => {
+      try {
+        // Auth
+        const decoded = await verifyToken(c)
+        if (!decoded || (decoded && !(decoded.role === 'reviewer'))) {
+          return c.json({ message: 'Unauthorized' }, 401)
+        }
+
+        const { results } = await c.env.DB.prepare(`
+          SELECT * FROM themes WHERE status = 'pending'
+        `).all()
+
+        return c.json(results)
+      } catch (error) {
+        console.error(error)
+        return c.json({ message: 'We had trouble getting all the pending themes' }, 500)
+      }
+    })
+
+    .patch('/:id/accept', async (c) => {
+      const decoded = await verifyToken(c)
+      if (!decoded || (decoded && !(decoded.role === 'reviewer'))) {
+        return c.json({ message: 'Unauthorized' }, 401)
+      }
+
+      const id = c.req.param('id')
+      try {
+        await c.env.DB.prepare(`
+          UPDATE themes
+            SET reviewer = ?, status = 'accepted', approved_at = ?
+          WHERE id = ?
+        `).bind(decoded.user, new Date().toISOString(), id).run()
+
+        await sendinbox(
+          c, 
+          "accepted-theme", 
+          `${decoded.user} has accepted your theme!`,
+          "theme",
+          id,
+          decoded.user
+        )
+        return c.json({ message: 'Successfully accepted theme!' }, 201)
+
+      } catch (error) {
+        return c.json({ message: 'We have trouble accepting this theme' }, 500)
+      }
+    })
+
+export default theme

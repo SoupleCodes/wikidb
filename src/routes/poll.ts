@@ -79,7 +79,7 @@ poll
     }
 
     try {
-        const { success } = await c.env.DB.prepare(`
+        await c.env.DB.prepare(`
           INSERT INTO comments
             (origin_type, origin_id, commenter, created_at, content)
           VALUES

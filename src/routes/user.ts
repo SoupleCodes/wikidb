@@ -12,9 +12,9 @@ user
   .get('/:username', async (c) => {
     const { username } = c.req.param()
     const lowercasedUsername = username.toLowerCase()
+    const bindings: (string | number | null)[] = [];
 
-    try {
-        const { results } = await c.env.DB.prepare(`
+    let prepareStatement = `
             SELECT 
                 id,
                 username,
@@ -31,13 +31,51 @@ user
                 social_links,
                 fav_articles,
                 music,
-                style
+                style,
+                theme
             FROM users WHERE lowercase_username = ?
-        `).bind(lowercasedUsername).all()
-        console.log(results[0])
+    `
+
+    // Auth
+    const decoded = await verifyToken(c)
+    if (decoded) {
+      prepareStatement = `
+            SELECT 
+              u.id, u.username, u.created_at,
+              u.last_activity, u.last_login,
+              u.about_me, u.display_name, u.view_count,
+              u.pfp_url, u.banner_url, u.signature,
+              u.location, u.social_links, u.fav_articles, u.music,
+              u.style, u.theme,
+            CASE
+              WHEN EXISTS (SELECT 1 FROM follows WHERE follower = ? AND following = u.lowercase_username)
+            THEN 1
+              ELSE 0
+            END AS followed
+            FROM users as u WHERE lowercase_username = ?
+      `
+      bindings.push(decoded.id, lowercasedUsername)
+    } else {
+      bindings.push(lowercasedUsername)
+    }
+
+
+    try {
+        const { results } = await c.env.DB.prepare(prepareStatement).bind(...bindings).all()
+
         results[0].social_links = parseIfArray(results[0].social_links as unknown as string)
         results[0].fav_articles = parseIfArray(results[0].fav_articles as unknown as string)
         results[0].music = parseIfArray(results[0].music as unknown as string)
+
+        let themeNum = results[0].theme
+        if (themeNum) {
+          const { results: theme } = await c.env.DB.prepare(`
+            SELECT * FROM themes WHERE id = ?
+          `).bind(themeNum).all()
+
+          theme[0].tags = parseIfArray(results[0].tags as unknown as string)
+          results[0].theme = theme[0]
+        }
 
         // Add one view
         await c.env.DB.prepare(`
@@ -324,6 +362,7 @@ user
 
       return c.json({ message: 'User followed successfully' }, 201)
     } catch (error) {
+      console.error(error)
       return c.json({ message: 'Something went wrong with following this user' }, 404)
     }
 

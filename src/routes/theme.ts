@@ -138,7 +138,7 @@ theme
             WHERE lowercase_username = ?
           `).bind((sameTheme ? null : id), decoded.user).run()
 
-          return c.json({ message: message }, 404)
+          return c.json({ message: message }, 201)
         } catch (error) {
           return c.json({ message: 'Having trouble selecting this theme' }, 400)
         }

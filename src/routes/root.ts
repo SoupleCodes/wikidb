@@ -108,7 +108,8 @@ root
               social_links,
               fav_articles,
               music,
-              style
+              style,
+              theme
           FROM users WHERE lowercase_username = ?
       `).bind(lowercaseUsername).first()
 

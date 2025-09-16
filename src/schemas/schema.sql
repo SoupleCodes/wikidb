@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS users (
     fav_articles TEXT,
     music TEXT,
     style TEXT,
+    theme TEXT
 );
 
 DROP TABLE IF EXISTS follows;
@@ -51,8 +52,8 @@ CREATE TABLE IF NOT EXISTS follows (
     follower TEXT NOT NULL,
     following TEXT NOT NULL,
     PRIMARY KEY (follower, following),
-    FOREIGN KEY (follower) REFERENCES users(username),
-    FOREIGN KEY (following) REFERENCES users(username)
+    FOREIGN KEY (follower) REFERENCES users(lowercase_username),
+    FOREIGN KEY (following) REFERENCES users(lowercase_username)
 );
 
 DROP TABLE IF EXISTS articles;

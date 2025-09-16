@@ -91,10 +91,12 @@ poll
           new Date().toISOString(),
           comment
         ).run()
+        const { results } = await c.env.DB.prepare("SELECT last_insert_rowid() AS id").all();
+        const newID = results[0].id;
   
         await active(c, decoded.user)
   
-        return c.json({ message: 'Comment created successfully' }, 201)
+        return c.json({ message: 'Comment created successfully', newID: newID }, 201)
       } catch (error) {
         console.error(error)
         return c.json({ message: 'Something went wrong with creating your comment' }, 500)
@@ -186,8 +188,9 @@ poll
           poll_votes as v
         ON
           v.user_id = ? AND v.poll_id = ?
+        WHERE polls.poll_id = ?
       `
-      bindings.push(decoded.id, id)
+      bindings.push(decoded.id, id, id)
     } else {
       bindings.push(id)
     }

@@ -100,13 +100,15 @@ article
         new Date().toISOString(),
         comment
       ).run()
+      const { results } = await c.env.DB.prepare("SELECT last_insert_rowid() AS id").all();
+      const newID = results[0].id;
 
       if(!success) {
         throw new Error('Something went wrong with creating your comment')
       }
       await active(c, decoded.user)
 
-      return c.json({ message: 'Comment created successfully' }, 201)
+      return c.json({ message: 'Comment created successfully', newID: newID }, 201)
     } catch (error) {
       console.error(error)
       return c.json({ message: 'Something went wrong with creating your comment' }, 500)

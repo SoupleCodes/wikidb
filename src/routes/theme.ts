@@ -54,10 +54,8 @@ theme
                 now
             ).run()
 
-            const { results } = await c.env.DB.prepare("SELECT last_insert_rowid() AS id").all();
-            const newID = results[0].id;
             await active(c, decoded.user)
-            return c.json({ message: 'Theme created successfully', id: newID }, 201)
+            return c.json({ message: 'Theme created successfully! Awaiting to be accepted by a reviewer!' }, 201)
         } catch (error) {
             console.error(error)
             return c.json({ message: 'Something went wrong submitting your theme' }, 500)
@@ -153,6 +151,10 @@ theme
           SELECT * FROM themes WHERE id = ?
       `).bind(id).all();
       results[0].tags = parseIfArray(results[0].tags as unknown as string)
+
+      if (results[0].status === 'pending') {
+        return c.json({ message: 'Theme is currently pending to be reviewed' }, 406)
+      }
       
       // Add one view
       await c.env.DB.prepare(`

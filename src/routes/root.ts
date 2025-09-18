@@ -17,7 +17,7 @@ root
     if (!username || !password) {
       return c.json({ message: 'Username or password is missing' }, 400)
     }
-    if (!(/^[a-zA-Z0-9.\-_$@*!]{3,30}$/).test(password)) {
+    if (!(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/).test(password)) {
       return c.json({ message: 'Password cannot contain spaces or newlines and must be at most 30 characters' }, 400)
     }
     const lowercaseUsername = username.toLowerCase()

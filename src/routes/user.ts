@@ -54,7 +54,7 @@ user
             END AS followed
             FROM users as u WHERE lowercase_username = ?
       `
-      bindings.push(decoded.id, lowercasedUsername)
+      bindings.push(decoded.user, lowercasedUsername)
     } else {
       bindings.push(lowercasedUsername)
     }

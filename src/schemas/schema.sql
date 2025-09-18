@@ -61,13 +61,12 @@ CREATE TABLE IF NOT EXISTS articles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     author TEXT,
-    subject TEXT DEFAULT 'Other' CHECK (subject IN ('Other', 'Technology', 'Gaming', 'Food', 'Animals', 'Websites', 'Music', 'Bands', 'Software', 'Souple', 'Biography', 'Science', 'Geography', 'History', 'Literature', 'Media', 'Sports & Recreation', 'Art & Design', 'Astronomy', 'Chemistry', 'Computer Science', 'Education', 'Film')),
+    subject TEXT DEFAULT 'Other',
     content TEXT NOT NULL,
     created_at TEXT NOT NULL,
     last_modified TEXT NOT NULL,
     view_count INTEGER DEFAULT 0,
     featured INTEGER DEFAULT 0,
-    favorites INTEGER DEFAULT 0
 );
 
 DROP TABLE IF EXISTS favorites;

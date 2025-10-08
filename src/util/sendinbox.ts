@@ -1,23 +1,27 @@
 import { Context } from "hono";
 import { verifyToken } from '../util/auth';
 
-export default async function sendinbox(c: Context, mail_type: string, content: string, origin_type: string, origin_id: number | string, sender: string, comment_id?: number) {
+export default async function sendInbox(c: Context, mail_type: string, content: string, origin_type: string, origin_id: number | string, sender: string, recipient: string, comment_id?: number) {
+    console.log('Sending inbox....')
+
     // Auth
     const decoded = await verifyToken(c)
     if (!decoded) {
-      return c.json({ message: 'Unauthorized' }, 401)
+      throw new Error('Unauthorized')
     }
 
     // A few checks
-    if (!mail_type || !content || !origin_type || origin_id || sender) {
-        return c.json({ message: 'Missing mailtype, content, sender, origin_type or origin_id' }, 400)
+    if (!mail_type || !content || !origin_type || !origin_id || !sender || !recipient) {
+        throw new Error('Missing mailtype, content, sender, recipient, origin_type or origin_id')
     }
     if (mail_type === 'comment' && !comment_id) {
-        return c.json({ message: 'Mailtype of comment needs to having corresponding comment_id' }, 400)
+        throw new Error('Mailtype of comment needs to having corresponding comment_id')
     }
-    if (decoded.user === sender) {
-        return c.json({ message: 'You can\'t send a message to yourself' }, 400)
+    /*
+    if (sender === recipient) {
+        throw new Error('You can\'t send a message to yourself')
     }
+    */
 
     try {
         await c.env.DB.prepare(`
@@ -27,7 +31,7 @@ export default async function sendinbox(c: Context, mail_type: string, content: 
                 (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
             sender,
-            decoded.user,
+            recipient,
             mail_type,
             content,
             new Date().toISOString(),
@@ -37,6 +41,7 @@ export default async function sendinbox(c: Context, mail_type: string, content: 
             comment_id || ''
         ).run()
     } catch (error) {
-        return c.json({ message: 'Failure to send message' }, 500)
+        console.log('Failure to send inbox. ' + error)
+        throw new Error('Failure to send into inbox. ' + error)
     }
 }

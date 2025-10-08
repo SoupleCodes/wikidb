@@ -26,8 +26,8 @@ inbox
 
         return c.json({
             inbox,
-            inbox_count,
-            unread_count
+            inbox_count: inbox_count[0].inbox_count,
+            unread_count: unread_count[0].inbox_count
         })
     } catch (error) {
         console.error(error)

@@ -16,4 +16,5 @@ interface User {
     fav_articles?: string | number[];
     music?: string[] | string;
     style?: string;
+    global_blog_css?: string
 }

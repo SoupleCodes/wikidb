@@ -4,6 +4,7 @@ import { trimTrailingSlash } from 'hono/trailing-slash'
 import { parseIfArray, parseIfJSON } from '../util/parse';
 import { verifyToken } from '../util/auth';
 import active from '../util/activity';
+import sendInbox from '../util/sendinbox';
 
 const user = new Hono<{ Bindings: Bindings }>();
 
@@ -32,7 +33,8 @@ user
                 fav_articles,
                 music,
                 style,
-                theme
+                theme,
+                global_blog_css
             FROM users WHERE lowercase_username = ?
     `
 
@@ -229,14 +231,26 @@ user
 
   .get('/:username/comments', async (c) => {
     const user = c.req.param('username');
+    const page = c.req.query('page')
+    const pageNum = (page as unknown as number - 1) * 40 || 0
     try {
       const { results }: { results: Comment[] } = await c.env.DB.prepare(`
           SELECT * FROM comments WHERE origin_type = ? AND origin_id = ?
-          ORDER BY created_at ASC
-      `).bind('user', user.toLowerCase()).all();
+          ORDER BY created_at DESC
+          LIMIT 40 OFFSET ?
+      `).bind('user', user.toLowerCase(), pageNum).all();
+      const { results: [{ total }] } = await c.env.DB.prepare(`
+        SELECT COUNT(*) as total FROM comments
+        WHERE origin_type = ? AND origin_id = ?
+      `).bind('user', user.toLowerCase()).all()
 
       let comments = await addUserData(results, c.env.DB)
-      return c.json(comments);
+      const totalPages = Math.ceil(Number(total) / 25);
+      return c.json({
+        comments,
+        page_count: totalPages - 1,
+        comment_count: Number(total)
+      });
     } catch (error) {
       console.error(error)
       return c.json({ message: 'User does not exist' }, 404);
@@ -295,7 +309,6 @@ user
     if(results.length === 0) {
       return c.json({ message: 'User does not exist' }, 404)
     }
-    console.log(results)
     if (!results[0].comments_enabled) {
       return c.json({ message: 'Comments are disabled for this profile!' }, 409)
     }
@@ -318,8 +331,21 @@ user
         throw new Error('Something went wrong with creating your comment')
       }
       const { results } = await c.env.DB.prepare("SELECT last_insert_rowid() AS id").all();
-      const newID = results[0].id;
+      const newID = results[0].id as unknown as number;
       await active(c, decoded.user)
+
+      const truncate = comment.length > 40
+      const truncatedString = comment.trim().substring(0,40) + '...'
+      await sendInbox(
+                c, 
+                "comment", 
+                `${decoded.user} commented on your profile! "${truncate ? truncatedString : comment}"`,
+                "user",
+                username,
+                decoded.user,
+                username,
+                newID
+              )
 
       return c.json({ message: 'Comment created successfully', newID: newID }, 201)
     } catch (error) {
@@ -361,6 +387,15 @@ user
         throw new Error('Something went wrong with following this user')
       }
       await active(c, decoded.user)
+      await sendInbox(
+        c, 
+        "follow", 
+        `${decoded.user} followed you!"`,
+        "user",
+        decoded.user,
+        decoded.user,
+        username
+      )
 
       return c.json({ message: 'User followed successfully' }, 201)
     } catch (error) {

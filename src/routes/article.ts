@@ -201,14 +201,26 @@ article
 
   .get('/:id/comments', async (c) => {
     const id = c.req.param('id');
+    const page = c.req.query('page')
+    const pageNum = (page as unknown as number - 1) * 40 || 0
     try {
       const { results }: { results: Comment[] } = await c.env.DB.prepare(`
           SELECT * FROM comments WHERE origin_type = ? AND origin_id = ?
-          ORDER BY created_at ASC
-      `).bind('article', id).all();
+          ORDER BY created_at DESC
+          LIMIT 40 OFFSET ?
+      `).bind('article', id, pageNum).all();
+      const { results: [{ total }] } = await c.env.DB.prepare(`
+        SELECT COUNT(*) as total FROM comments
+        WHERE origin_type = ? AND origin_id = ?
+      `).bind('article', id).all()
 
       let comments = await addUserData(results, c.env.DB)
-      return c.json(comments);
+      const totalPages = Math.ceil(Number(total) / 25);
+      return c.json({
+        comments,
+        page_count: totalPages - 1,
+        comment_count: Number(total)
+      });
     } catch (error) {
       return c.json({ message: 'Article does not exist' }, 404);
     }

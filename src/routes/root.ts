@@ -17,8 +17,12 @@ root
     if (!username || !password) {
       return c.json({ message: 'Username or password is missing' }, 400)
     }
-    if (!(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/).test(password)) {
-      return c.json({ message: 'Password cannot contain spaces or newlines and must be at most 30 characters' }, 400)
+    if (username.length < 3) {
+      return c.json({ message: 'Username is too short' }, 400)
+    }
+    const pattern = /^[a-zA-Z0-9_]+$/;
+    if (!pattern.test(username)) {
+      return c.json({ message: 'Username contains invalid characters. Only letters, numbers, and underscores are allowed.' }, 400)
     }
     const lowercaseUsername = username.toLowerCase()
     const { results: existingUser } = await c.env.DB.prepare(`
@@ -38,7 +42,7 @@ root
     const { success } = await c.env.DB.prepare(`
         INSERT INTO users (username, lowercase_username, display_name, password_hash, password_changed_at, created_at, last_activity)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(username, lowercaseUsername, '', passwordHash, now, now, now).run()
+    `).bind(username, lowercaseUsername, username, passwordHash, now, now, now).run()
     if(!success) {
         return c.json({ message: 'Failed to create user' }, 400)
     }
@@ -98,6 +102,7 @@ root
               created_at,
               last_activity,
               last_login,
+              role,
               about_me,
               display_name,
               view_count,
@@ -109,7 +114,8 @@ root
               fav_articles,
               music,
               style,
-              theme
+              theme,
+              global_blog_css
           FROM users WHERE lowercase_username = ?
       `).bind(lowercaseUsername).first()
 

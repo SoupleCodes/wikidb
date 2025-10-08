@@ -3,7 +3,7 @@ import { trimTrailingSlash } from 'hono/trailing-slash'
 import { verifyToken } from '../util/auth';
 import { parseIfArray } from '../util/parse';
 import active from '../util/activity';
-import sendinbox from '../util/sendinbox';
+import sendInbox from '../util/sendinbox';
 import { addUserData } from '../util/data';
 
 const theme = new Hono<{ Bindings: Bindings }>()
@@ -62,6 +62,51 @@ theme
         }
     })
 
+    .get('/pending', async (c) => {
+      try {
+        // Auth
+        const decoded = await verifyToken(c)
+        if (!decoded || (decoded && !(decoded.role === 'reviewer'))) {
+          return c.json({ message: 'Unauthorized' }, 401)
+        }
+
+        const { results } = await c.env.DB.prepare(`
+          SELECT * FROM themes WHERE status = 'pending'
+        `).all()
+
+        return c.json(results)
+      } catch (error) {
+        console.error(error)
+        return c.json({ message: 'We had trouble getting all the pending themes' }, 500)
+      }
+    })
+
+    .get('/:id/comments', async (c) => {
+      const id = c.req.param('id');
+      const page = c.req.query('page')
+      const pageNum = (page as unknown as number - 1) * 40 || 0
+      try {
+        const { results }: { results: Comment[] } = await c.env.DB.prepare(`
+            SELECT * FROM comments WHERE origin_type = ? AND origin_id = ?
+            ORDER BY created_at DESC
+            LIMIT 40 OFFSET ?
+        `).bind('theme', id, pageNum).all();
+        const { results: [{ total }] } = await c.env.DB.prepare(`
+          SELECT COUNT(*) as total FROM comments
+          WHERE origin_type = ? AND origin_id = ?
+        `).bind('theme', id).all()
+  
+        let comments = await addUserData(results, c.env.DB)
+        const totalPages = Math.ceil(Number(total) / 25);
+        return c.json({
+          comments,
+          page_count: totalPages - 1,
+          comment_count: Number(total)
+        });
+      } catch (error) {
+        return c.json({ message: 'Theme does not exist' }, 404);
+      }
+    })
     .post('/:id/comment', async (c) => {
         // Auth
         const decoded = await verifyToken(c)
@@ -106,6 +151,7 @@ theme
             await active(c, decoded.user)
             return c.json({ message: 'Comment created successfully', newID: newID }, 201)
           } catch (error) {
+            console.error(error)
             return c.json({ message: 'Something went wrong with creating your comment' }, 500)
           }
     })
@@ -170,25 +216,6 @@ theme
     }
     })
 
-    .get('/pending', async (c) => {
-      try {
-        // Auth
-        const decoded = await verifyToken(c)
-        if (!decoded || (decoded && !(decoded.role === 'reviewer'))) {
-          return c.json({ message: 'Unauthorized' }, 401)
-        }
-
-        const { results } = await c.env.DB.prepare(`
-          SELECT * FROM themes WHERE status = 'pending'
-        `).all()
-
-        return c.json(results)
-      } catch (error) {
-        console.error(error)
-        return c.json({ message: 'We had trouble getting all the pending themes' }, 500)
-      }
-    })
-
     .patch('/:id/accept', async (c) => {
       const decoded = await verifyToken(c)
       if (!decoded || (decoded && !(decoded.role === 'reviewer'))) {
@@ -202,15 +229,17 @@ theme
             SET reviewer = ?, status = 'accepted', approved_at = ?
           WHERE id = ?
         `).bind(decoded.user, new Date().toISOString(), id).run()
-
-        await sendinbox(
+/*
+        await sendInbox(
           c, 
           "accepted-theme", 
           `${decoded.user} has accepted your theme!`,
           "theme",
           id,
+          'Wikiverse',
           decoded.user
         )
+          */
         return c.json({ message: 'Successfully accepted theme!' }, 201)
 
       } catch (error) {

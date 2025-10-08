@@ -18,7 +18,8 @@ export async function addUserData(objects: any[], db: D1Database) {
                     pfp_url,
                     banner_url,
                     signature,
-                    location
+                    location,
+                    global_blog_css
                 FROM users WHERE lowercase_username = ?
             `).bind(username).first();
 

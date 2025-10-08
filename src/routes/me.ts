@@ -17,7 +17,7 @@ me
     const username = decoded.user
     const data: User = await c.req.json()
 
-    let { about_me, display_name, pfp_url, banner_url, signature, location, social_links, fav_articles, music, style } = data
+    let { about_me, display_name, pfp_url, banner_url, signature, location, social_links, fav_articles, music, style, global_blog_css } = data
 
     try {
       const updates: string[] = [];
@@ -38,7 +38,7 @@ me
       }
 
       f("about_me"), f("display_name"), f("signature"),
-      f("location"), f("style")
+      f("location"), f("style"), f("global_blog_css")
 
       if (pfp_url && !(/^https?:\/\/.+/.test(pfp_url))) {
         return c.json({ message: 'Invalid pfp_url format'}, 404)
